@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "LLM Comparator",
+  "version": "1.0",
+  "description": "Send prompts to ChatGPT, Claude, and AskMe directly via their open tabs",
+  "permissions": [
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://askme.mobileye.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://askme.mobileye.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ]
+}

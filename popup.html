@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 10px;
+      width: 600px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 60px;
+    }
+
+    .model-selection {
+      margin: 10px 0;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    .model-selection h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+
+    .model-checkboxes {
+      display: flex;
+      gap: 15px;
+    }
+
+    .model-checkboxes .model-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .model-checkboxes label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .open-tab-btn {
+      padding: 2px 6px;
+      font-size: 11px;
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .open-tab-btn:hover {
+      background: #e0e0e0;
+    }
+
+    .open-tab-btn:active {
+      background: #d0d0d0;
+    }
+
+    .responses {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .resp {
+      flex: 1;
+      border: 1px solid #ccc;
+      padding: 6px;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      max-height: 400px;
+    }
+
+    .resp.disabled {
+      opacity: 0.5;
+      background-color: #f9f9f9;
+    }
+  </style>
+</head>
+
+<body>
+  <textarea id="prompt" placeholder="Enter your prompt..."></textarea><br>
+
+  <div class="model-selection">
+    <h4>Select Models:</h4>
+    <div class="model-checkboxes">
+      <div class="model-item">
+        <label>
+          <input type="checkbox" id="enable-chatgpt" name="model" value="chatgpt">
+          ChatGPT
+        </label>
+        <button class="open-tab-btn" data-url="https://chatgpt.com" title="Open ChatGPT tab">Open Tab</button>
+      </div>
+      <div class="model-item">
+        <label>
+          <input type="checkbox" id="enable-claude" name="model" value="claude">
+          Claude
+        </label>
+        <button class="open-tab-btn" data-url="https://claude.ai" title="Open Claude tab">Open Tab</button>
+      </div>
+      <div class="model-item">
+        <label>
+          <input type="checkbox" id="enable-askme" name="model" value="askme" checked>
+          AskMe
+        </label>
+        <button class="open-tab-btn" data-url="https://askme.mobileye.com" title="Open AskMe tab">Open Tab</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="send">Send</button>
+  <div class="responses">
+    <div class="resp" id="chatgpt"><b>ChatGPT:</b><br></div>
+    <div class="resp" id="claude"><b>Claude:</b><br></div>
+    <div class="resp" id="askme"><b>AskMe:</b><br></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+
+</html>

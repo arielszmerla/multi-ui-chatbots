@@ -1,0 +1,1 @@
+// Placeholder content script (not used directly)
