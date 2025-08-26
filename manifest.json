@@ -5,12 +5,14 @@
   "description": "Send prompts to ChatGPT, Claude, and AskMe directly via their open tabs",
   "permissions": [
     "tabs",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://claude.ai/*",
-    "https://askme.mobileye.com/*"
+    "https://askme.mobileye.com/*",
+    "https://api.openai.com/*"
   ],
   "action": {
     "default_popup": "popup.html"

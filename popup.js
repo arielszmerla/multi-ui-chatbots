@@ -1,10 +1,20 @@
+// Global variables to track responses
+let collectedResponses = {};
+let currentPrompt = "";
+
 document.getElementById("send").addEventListener("click", async () => {
   const prompt = document.getElementById("prompt").value;
-  console.log("Prompt:", prompt);
+  currentPrompt = prompt;
+
+  // Reset collected responses
+  collectedResponses = {};
+
+  // Hide summary section and button
+  document.getElementById("summary-section").classList.add("hidden");
+  document.getElementById("generate-summary").classList.add("hidden");
 
   // Get selected models
   const enabledModels = Array.from(document.querySelectorAll('input[name="model"]:checked')).map(cb => cb.value);
-  console.log("Enabled models:", enabledModels);
 
   const targets = [
     { name: "chatgpt", url: "https://chatgpt.com/*" },
@@ -28,18 +38,16 @@ document.getElementById("send").addEventListener("click", async () => {
   const processingPromises = targets
     .filter(target => enabledModels.includes(target.name))
     .map(async (target) => {
-      console.log(`Checking tabs for ${target.name}:`, target.url);
-
       try {
         const tabs = await chrome.tabs.query({ url: target.url });
-        console.log(`Found ${tabs.length} tabs for ${target.name}:`, tabs);
 
         if (tabs.length === 0) {
-          document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>No tab open`;
+          const noTabMessage = "No tab open";
+          document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>${noTabMessage}`;
+          collectedResponses[target.name] = noTabMessage;
           return;
         }
 
-        console.log(`Executing script on ${target.name} tab:`, tabs[0].id);
         document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>Sending...`;
 
         const [{ result }] = await chrome.scripting.executeScript({
@@ -47,21 +55,297 @@ document.getElementById("send").addEventListener("click", async () => {
           func: sendPromptAndScrape,
           args: [prompt, target.name]
         });
-
-        console.log(`Result from ${target.name}:`, result);
         document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>${result}`;
+        collectedResponses[target.name] = result;
       } catch (error) {
         console.error(`Error with ${target.name}:`, error);
-        document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>Error: ${error.message}`;
+        const errorMessage = `Error: ${error.message}`;
+        document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>${errorMessage}`;
+        collectedResponses[target.name] = errorMessage;
       }
     });
 
   // Wait for all models to complete
   await Promise.all(processingPromises);
+
+  // Show summary button if we have responses and API key is configured
+  checkAndShowSummaryButton();
 });
+
+// Summary functionality
+document.getElementById("generate-summary").addEventListener("click", async () => {
+  await generateSummary();
+});
+
+// API Key management - auto-save on input (with debounce)
+let saveTimeout;
+document.getElementById("openai-api-key").addEventListener("input", (e) => {
+  const apiKey = e.target.value.trim();
+
+  // Clear previous timeout
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
+
+  // Debounce the save operation
+  saveTimeout = setTimeout(async () => {
+    await saveApiKey(apiKey);
+  }, 1000); // Save after 1 second of no typing
+
+  // Update button visibility immediately
+  checkAndShowSummaryButton();
+});
+
+// Manual save button
+document.getElementById("save-api-key").addEventListener("click", async () => {
+  const apiKey = document.getElementById("openai-api-key").value.trim();
+  await saveApiKey(apiKey);
+});
+
+// Change API key button
+document.getElementById("change-api-key").addEventListener("click", () => {
+  showInputModeWithCurrentKey();
+});
+
+// Remove API key button
+document.getElementById("remove-api-key").addEventListener("click", async () => {
+  if (confirm("Are you sure you want to remove your API key?")) {
+    await saveApiKey(""); // Save empty string to remove
+  }
+});
+
+// Also save on blur to ensure it's saved
+document.getElementById("openai-api-key").addEventListener("blur", async (e) => {
+  const apiKey = e.target.value.trim();
+  if (apiKey) {
+    await saveApiKey(apiKey);
+  }
+});
+
+// Unified save function with fallback
+async function saveApiKey(apiKey) {
+  try {
+    // Try Chrome storage first
+    if (chrome && chrome.storage && chrome.storage.local) {
+      if (apiKey) {
+        await chrome.storage.local.set({ openaiApiKey: apiKey });
+        updateApiStatus("API key saved (Chrome)");
+        showSavedMode();
+      } else {
+        await chrome.storage.local.remove("openaiApiKey");
+        updateApiStatus("API key not configured");
+        showInputMode();
+      }
+    } else {
+      // Fallback to localStorage
+      if (apiKey) {
+        localStorage.setItem("openaiApiKey", apiKey);
+        updateApiStatus("API key saved (local)");
+        showSavedMode();
+      } else {
+        localStorage.removeItem("openaiApiKey");
+        updateApiStatus("API key not configured");
+        showInputMode();
+      }
+    }
+    checkAndShowSummaryButton();
+  } catch (error) {
+    console.error("Error saving API key:", error);
+    updateApiStatus(`Error saving API key: ${error.message}`);
+  }
+}
+
+async function loadApiKey() {
+  try {
+    let apiKey = null;
+
+    // Try Chrome storage first
+    if (chrome && chrome.storage && chrome.storage.local) {
+      try {
+        const result = await chrome.storage.local.get("openaiApiKey");
+        apiKey = result.openaiApiKey;
+      } catch (chromeError) {
+        // Chrome storage failed, will try localStorage
+      }
+    }
+
+    // Fallback to localStorage if Chrome storage failed or not available
+    if (!apiKey) {
+      apiKey = localStorage.getItem("openaiApiKey");
+    }
+
+    if (apiKey) {
+      const apiKeyInput = document.getElementById("openai-api-key");
+      apiKeyInput.value = apiKey; // Set value but it will be hidden
+      updateApiStatus("API key configured");
+      showSavedMode();
+      // Check if we should show summary button
+      checkAndShowSummaryButton();
+    } else {
+      updateApiStatus("API key not configured");
+      showInputMode();
+    }
+  } catch (error) {
+    console.error("Error loading API key:", error);
+    updateApiStatus(`Error loading API key: ${error.message}`);
+    showInputMode();
+  }
+}
+
+function updateApiStatus(message) {
+  document.getElementById("api-status").textContent = message;
+}
+
+// UI Mode switching functions
+function showInputMode() {
+  document.getElementById("api-key-input-mode").classList.remove("hidden");
+  document.getElementById("api-key-saved-mode").classList.add("hidden");
+  // Clear the input and focus it
+  const input = document.getElementById("openai-api-key");
+  input.value = "";
+  input.focus();
+}
+
+function showSavedMode() {
+  document.getElementById("api-key-input-mode").classList.add("hidden");
+  document.getElementById("api-key-saved-mode").classList.remove("hidden");
+}
+
+function showInputModeWithCurrentKey() {
+  document.getElementById("api-key-input-mode").classList.remove("hidden");
+  document.getElementById("api-key-saved-mode").classList.add("hidden");
+  // Keep the current API key in the input and focus it
+  const input = document.getElementById("openai-api-key");
+  input.focus();
+  input.select(); // Select all text so user can easily replace it
+}
+
+function checkAndShowSummaryButton() {
+  const hasResponses = Object.keys(collectedResponses).length > 0;
+  const hasValidResponses = Object.values(collectedResponses).some(response =>
+    response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")
+  );
+  const hasApiKey = document.getElementById("openai-api-key").value.trim().length > 0;
+
+  if (hasResponses && hasValidResponses && hasApiKey) {
+    document.getElementById("generate-summary").classList.remove("hidden");
+  } else {
+    document.getElementById("generate-summary").classList.add("hidden");
+  }
+}
+
+async function generateSummary() {
+  const apiKey = document.getElementById("openai-api-key").value.trim();
+  if (!apiKey) {
+    alert("Please configure your OpenAI API key first.");
+    return;
+  }
+
+  // Show summary section and loading state
+  const summarySection = document.getElementById("summary-section");
+  const summaryContent = document.getElementById("summary-content");
+
+  summarySection.classList.remove("hidden");
+  summaryContent.innerHTML = '<div class="text-center text-muted">Generating summary...</div>';
+
+  // Disable summary button while processing
+  const summaryButton = document.getElementById("generate-summary");
+  summaryButton.disabled = true;
+  summaryButton.textContent = "Generating...";
+
+  try {
+    // Prepare the prompt for summarization
+    const summaryPrompt = createSummaryPrompt();
+
+    // Call OpenAI API
+    const summary = await callOpenAI(apiKey, summaryPrompt);
+
+    // Display the summary
+    summaryContent.innerHTML = summary;
+
+  } catch (error) {
+    console.error("Error generating summary:", error);
+    summaryContent.innerHTML = `<div style="color: red;">Error generating summary: ${error.message}</div>`;
+  } finally {
+    // Re-enable summary button
+    summaryButton.disabled = false;
+    summaryButton.textContent = "Regenerate Summary";
+  }
+}
+
+function createSummaryPrompt() {
+  let prompt = `Please analyze and summarize the following AI model responses to this prompt:\n\n`;
+  prompt += `**Original Prompt:** "${currentPrompt}"\n\n`;
+  prompt += `**Responses:**\n\n`;
+
+  for (const [model, response] of Object.entries(collectedResponses)) {
+    if (response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")) {
+      prompt += `**${model.toUpperCase()}:**\n${response}\n\n`;
+    }
+  }
+
+  prompt += `Please provide:\n`;
+  prompt += `1. **Key Similarities:** What did all models agree on?\n`;
+  prompt += `2. **Key Differences:** Where did the models diverge?\n`;
+  prompt += `3. **Unique Insights:** What unique perspectives did each model offer?\n`;
+  prompt += `4. **Quality Assessment:** Which response was most comprehensive/accurate?\n`;
+  prompt += `5. **Consolidated Answer:** Combine the best elements into one cohesive response.\n\n`;
+  prompt += `Format your response clearly with the above sections.`;
+
+  return prompt;
+}
+
+async function callOpenAI(apiKey, prompt) {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert AI analyst. Provide clear, structured comparisons and summaries of AI model responses."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 1500,
+      temperature: 0.7
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// Enable/disable send button based on prompt input
+function updateSendButton() {
+  const prompt = document.getElementById("prompt").value.trim();
+  const sendButton = document.getElementById("send");
+  sendButton.disabled = prompt.length === 0;
+}
 
 // Add event listeners to update visual state when checkboxes change
 document.addEventListener('DOMContentLoaded', () => {
+  // Load saved API key
+  loadApiKey();
+
+  // Add input listener to prompt textarea
+  document.getElementById("prompt").addEventListener("input", updateSendButton);
+
+  // Initialize send button state
+  updateSendButton();
+
   const checkboxes = document.querySelectorAll('input[name="model"]');
   checkboxes.forEach(checkbox => {
     checkbox.addEventListener('change', () => {
@@ -89,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add event listeners for "Open Tab" buttons
-  const openTabButtons = document.querySelectorAll('.open-tab-btn');
+  const openTabButtons = document.querySelectorAll('.btn-small[data-url]');
   openTabButtons.forEach(button => {
     button.addEventListener('click', async () => {
       const url = button.getAttribute('data-url');
@@ -103,11 +387,9 @@ document.addEventListener('DOMContentLoaded', () => {
           // Focus existing tab
           await chrome.tabs.update(existingTabs[0].id, { active: true });
           await chrome.windows.update(existingTabs[0].windowId, { focused: true });
-          console.log(`Focused existing ${modelName} tab`);
         } else {
           // Create new tab
           await chrome.tabs.create({ url: url, active: true });
-          console.log(`Created new ${modelName} tab`);
         }
 
         // Brief visual feedback
@@ -133,16 +415,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Runs inside the target page
 async function sendPromptAndScrape(prompt, who) {
-  console.log(`Running on ${who} with prompt:`, prompt);
 
   // 🔹 ChatGPT
   if (who === "chatgpt") {
     // Try the contenteditable approach first
     const promptDiv = document.querySelector("#prompt-textarea");
     const promptP = document.querySelector("#prompt-textarea > p");
-
-    console.log("ChatGPT prompt div found:", !!promptDiv);
-    console.log("ChatGPT prompt p found:", !!promptP);
 
     if (promptP) {
       // Clear existing content and set new content
@@ -162,7 +440,6 @@ async function sendPromptAndScrape(prompt, who) {
     } else {
       // Last fallback: try textarea
       const textarea = document.querySelector("textarea");
-      console.log("ChatGPT textarea fallback found:", !!textarea);
       if (!textarea) return "Input box not found";
       textarea.value = prompt;
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -173,7 +450,6 @@ async function sendPromptAndScrape(prompt, who) {
       document.querySelector('svg[data-testid="send-button"]')?.closest('button') ||
       document.querySelector('button[aria-label*="Send"]') ||
       document.querySelector('[data-testid="fruitjuice-send-button"]');
-    console.log("ChatGPT submit button found:", !!submitButton);
 
     // Wait a moment for the UI to update
     await new Promise(r => setTimeout(r, 500));
@@ -221,7 +497,6 @@ async function sendPromptAndScrape(prompt, who) {
     await new Promise(r => setTimeout(r, 100));
     const sendButtonRetry = document.querySelector('button[data-testid="send-button"]:not([disabled])');
     if (sendButtonRetry && !submitButton?.click) {
-      console.log("Retrying send button click");
       sendButtonRetry.click();
     }
 
@@ -239,37 +514,30 @@ async function sendPromptAndScrape(prompt, who) {
       attempts++;
     }
 
-    console.log("Finished waiting for streaming, now looking for messages...");
-
     // Try multiple selectors to find ChatGPT response
     let responseText = "";
 
     // Try data-message-author-role first
     const assistantMessages = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
-    console.log("Assistant messages found:", assistantMessages.length);
 
     if (assistantMessages.length > 0) {
       const lastMessage = assistantMessages[assistantMessages.length - 1];
       responseText = lastMessage?.innerText?.trim();
-      console.log("Got response from assistant role:", responseText?.substring(0, 100));
     }
 
     // Fallback 1: Look for markdown content
     if (!responseText) {
       const markdownElements = Array.from(document.querySelectorAll('.markdown, .prose, [class*="markdown"]'));
-      console.log("Markdown elements found:", markdownElements.length);
 
       if (markdownElements.length > 0) {
         const lastMarkdown = markdownElements[markdownElements.length - 1];
         responseText = lastMarkdown?.innerText?.trim();
-        console.log("Got response from markdown:", responseText?.substring(0, 100));
       }
     }
 
     // Fallback 2: Look for conversation messages
     if (!responseText) {
       const conversationMessages = Array.from(document.querySelectorAll('[data-testid*="conversation"] div, .conversation div, [role="presentation"] div'));
-      console.log("Conversation messages found:", conversationMessages.length);
 
       // Get the last few and find one that looks like a response
       const recentMessages = conversationMessages.slice(-10);
@@ -277,7 +545,6 @@ async function sendPromptAndScrape(prompt, who) {
         const text = recentMessages[i]?.innerText?.trim();
         if (text && text.length > 10 && !text.includes("Copy code")) {
           responseText = text;
-          console.log("Got response from conversation:", responseText?.substring(0, 100));
           break;
         }
       }
@@ -319,7 +586,7 @@ async function sendPromptAndScrape(prompt, who) {
       document.querySelector('p[data-placeholder]') ||
       document.querySelector('.ProseMirror p');
 
-    console.log("Claude input p found:", !!claudeInputP);
+
 
     if (claudeInputP) {
       // Clear existing content and set new content
@@ -343,7 +610,6 @@ async function sendPromptAndScrape(prompt, who) {
     } else {
       // Fallback to textarea
       const textarea = document.querySelector("textarea");
-      console.log("Claude textarea fallback found:", !!textarea);
       if (!textarea) return "Input box not found";
       textarea.value = prompt;
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -359,7 +625,6 @@ async function sendPromptAndScrape(prompt, who) {
       document.querySelector('button:not([disabled])') &&
       Array.from(document.querySelectorAll('button:not([disabled])')).find(btn =>
         btn.textContent.includes('Send') || btn.getAttribute('aria-label')?.includes('Send'));
-    console.log("Claude submit button found:", !!submitButton);
 
     if (submitButton && !submitButton.disabled) {
       submitButton.click();
