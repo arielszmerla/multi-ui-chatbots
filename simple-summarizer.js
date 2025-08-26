@@ -1,5 +1,5 @@
-// REAL Browser LLM using locally bundled Transformers.js
-// Clean implementation with bundled library
+// REAL Browser LLM using locally bundled Transformers.js with ES modules
+// Import the pipeline function from the local Transformers.js
 
 class RealBrowserLLM {
     constructor() {
@@ -16,13 +16,10 @@ class RealBrowserLLM {
         progressCallback?.("🔄 Initializing Real Neural LLM...");
 
         try {
-            // Wait for Transformers.js to be available
-            await this.waitForTransformers(progressCallback);
-
             progressCallback?.("📦 Transformers.js loaded! Downloading DistilGPT-2 model (~67MB)...");
 
             // Initialize the actual text generation pipeline with DistilGPT-2
-            this.pipeline = await window.Transformers.pipeline(
+            this.pipeline = await pipeline(
                 'text-generation',
                 'Xenova/distilgpt2',
                 {
@@ -48,9 +45,7 @@ class RealBrowserLLM {
 
             // Provide specific error messages
             let errorMessage = "Unknown error";
-            if (error.message.includes('Transformers.js library not loaded')) {
-                errorMessage = "Transformers.js library not found - check HTML script tags";
-            } else if (error.message.includes('pipeline')) {
+            if (error.message.includes('pipeline')) {
                 errorMessage = "Model initialization failed - try reloading the extension";
             } else if (error.message.includes('network') || error.message.includes('fetch')) {
                 errorMessage = "Cannot download model - check internet connection";
@@ -60,34 +55,6 @@ class RealBrowserLLM {
 
             throw new Error(`Real LLM failed to load: ${errorMessage}`);
         }
-    }
-
-    async waitForTransformers(progressCallback) {
-        return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 100; // 10 seconds total
-
-            progressCallback?.("⏳ Waiting for Transformers.js library to load...");
-
-            const checkLibrary = () => {
-                attempts++;
-                console.log(`Checking for Transformers.js, attempt ${attempts}, window.Transformers:`, !!window.Transformers);
-
-                if (window.Transformers) {
-                    console.log("Transformers.js found!");
-                    resolve();
-                } else if (attempts >= maxAttempts) {
-                    console.error("Transformers.js not found after", maxAttempts, "attempts");
-                    console.log("Available window properties:", Object.keys(window).filter(k => k.toLowerCase().includes('transform')));
-                    reject(new Error('Transformers.js library not available after waiting - check script loading'));
-                } else {
-                    setTimeout(checkLibrary, 100);
-                }
-            };
-
-            // Start checking immediately
-            checkLibrary();
-        });
     }
 
     formatBytes(bytes) {
@@ -192,26 +159,7 @@ window.simpleSummarizer = {
     summarize: (text) => window.realBrowserLLM.summarize(text)
 };
 
-// Check if Transformers.js loaded and provide fallback
-if (window.Transformers) {
-    console.log("Transformers.js already available");
-} else {
-    console.log("Transformers.js not yet available, will wait during initialization");
-
-    // Also try loading manually as fallback if script tag fails
-    setTimeout(() => {
-        if (!window.Transformers) {
-            console.log("Script tag didn't load Transformers.js, trying manual load...");
-            const script = document.createElement('script');
-            script.src = './libs/transformers.min.js';
-            script.onload = () => console.log("Manual script load completed");
-            script.onerror = (e) => console.error("Manual script load failed:", e);
-            document.head.appendChild(script);
-        }
-    }, 1000);
-}
-
-// Notify when ready (after HTML scripts load)
+// Notify when ready (ES module loaded)
 setTimeout(() => {
     window.dispatchEvent(new CustomEvent('simpleSummarizerReady'));
 }, 100); 
