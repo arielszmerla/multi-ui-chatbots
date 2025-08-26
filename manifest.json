@@ -3,6 +3,11 @@
   "name": "LLM Comparator",
   "version": "1.0",
   "description": "Send prompts to ChatGPT, Claude, and AskMe directly via their open tabs with local WebLLM support",
+  "icons": {
+    "16": "11698467.png",
+    "48": "11698467.png",
+    "128": "11698467.png"
+  },
   "permissions": [
     "tabs",
     "scripting",
