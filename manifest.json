@@ -17,6 +17,19 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "models/*.onnx",
+        "models/*.bin",
+        "models/*.wasm",
+        "libs/*.wasm"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "action": {
     "default_popup": "popup.html"
   },
