@@ -2,7 +2,7 @@
 let collectedResponses = {};
 let currentPrompt = "";
 
-// Browser LLM variables
+// Real Neural LLM variables
 let browserSummarizer = null;
 let isModelLoaded = false;
 let isModelLoading = false;
@@ -295,7 +295,7 @@ async function generateBrowserBasedSummary() {
   // Combine responses
   const combinedText = `Original Prompt: "${currentPrompt}"\n\nResponses:\n${responses.join('\n\n')}`;
 
-  // Generate summary using local Browser LLM
+  // Generate summary using real neural LLM
   const summary = await generateBrowserSummary(combinedText);
 
   // Format the summary nicely
@@ -363,43 +363,43 @@ async function callOpenAI(apiKey, prompt) {
   return data.choices[0].message.content;
 }
 
-// Browser LLM Functions
+// Real Neural LLM Functions
 async function initBrowserLLM() {
   if (isModelLoading || isModelLoaded) return;
 
-  // Check if Browser LLM is available
-  if (!window.browserLLM || !window.browserLLM.available) {
-    updateModelStatus("Browser LLM: Analysis engine not available");
+  // Check if Real Browser LLM is available
+  if (!window.realBrowserLLM || !window.realBrowserLLM.available) {
+    updateModelStatus("Real Neural LLM: Library not available");
     return;
   }
 
   try {
     isModelLoading = true;
-    updateModelStatus("Initializing local analysis engine...");
+    updateModelStatus("Loading Transformers.js library...");
 
-    // Initialize Browser LLM with progress tracking
-    await window.browserLLM.initialize((progressMessage) => {
-      updateModelStatus(`Browser LLM: ${progressMessage}`);
+    // Initialize Real Browser LLM with progress tracking
+    await window.realBrowserLLM.initialize((progressMessage) => {
+      updateModelStatus(`Real Neural LLM: ${progressMessage}`);
     });
 
-    // Use the local Browser LLM instance
-    browserSummarizer = window.simpleSummarizer; // This uses the browserLLM under the hood
+    // Use the real neural LLM instance
+    browserSummarizer = window.simpleSummarizer; // This uses the realBrowserLLM under the hood
 
     isModelLoaded = true;
     isModelLoading = false;
-    updateModelStatus("Browser LLM: Analysis engine ready!");
+    updateModelStatus("Real Neural LLM: DistilGPT-2 ready!");
     updateSummaryButtonState();
 
   } catch (error) {
-    console.error("Error initializing Browser LLM:", error);
+    console.error("Error initializing Real Neural LLM:", error);
     isModelLoading = false;
-    updateModelStatus(`Browser LLM: Failed to initialize - ${error.message}`);
+    updateModelStatus(`Real Neural LLM: Failed to load - ${error.message}`);
   }
 }
 
 async function generateBrowserSummary(text) {
   if (!isModelLoaded || !browserSummarizer) {
-    throw new Error("Browser LLM not loaded");
+    throw new Error("Real Neural LLM not loaded");
   }
 
   try {
@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (method === "browser") {
       openaiSettings.classList.add("hidden");
       if (!isModelLoaded && !isModelLoading) {
-        updateModelStatus("Browser LLM: Analysis engine not initialized yet");
+        updateModelStatus("Real Neural LLM: Model not downloaded yet");
       }
     } else {
       openaiSettings.classList.remove("hidden");
@@ -482,16 +482,16 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSummaryButtonState();
   });
 
-  // Listen for Browser LLM ready event
+  // Listen for Real Neural LLM ready event
   window.addEventListener('simpleSummarizerReady', () => {
-    updateModelStatus("Browser LLM: Ready to initialize");
-    // Auto-initialize Browser LLM when ready
+    updateModelStatus("Real Neural LLM: Ready to download model");
+    // Auto-initialize Real Neural LLM when ready
     if (!isModelLoaded && !isModelLoading) {
       initBrowserLLM();
     }
   });
 
-  // Initialize Browser LLM immediately if available
+  // Initialize Real Neural LLM immediately if available
   if (window.simpleSummarizer && window.simpleSummarizer.available && !isModelLoaded && !isModelLoading) {
     initBrowserLLM();
   }
