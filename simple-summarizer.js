@@ -222,11 +222,20 @@ class RealBrowserLLM {
     }
 
     tokenize(text) {
-        // Convert text to tokens
+        // Convert text to tokens with null safety
+        if (!text || typeof text !== 'string') {
+            console.warn('Invalid text input to tokenize:', text);
+            return [this.vocabulary.wordToIndex['<unk>']];
+        }
+
         const words = text.toLowerCase()
             .replace(/[^\w\s]/g, ' ')
             .split(/\s+/)
             .filter(word => word.length > 0);
+
+        if (words.length === 0) {
+            return [this.vocabulary.wordToIndex['<unk>']];
+        }
 
         return words.map(word =>
             this.vocabulary.wordToIndex[word] || this.vocabulary.wordToIndex['<unk>']
@@ -307,35 +316,55 @@ class RealBrowserLLM {
 
     async generateNeuralAnalysis(text) {
         console.log("🧠 Running pure JavaScript neural network analysis...");
+        console.log("Input text length:", text?.length || 0);
 
         try {
             const responses = this.parseResponses(text);
+            console.log("Parsed responses count:", responses.length);
+
             if (responses.length === 0) {
-                return "⚠️ No valid responses found to analyze.";
+                return "⚠️ No valid responses found to analyze. Make sure responses are formatted with **CHATGPT:**, **CLAUDE:**, or **ASKME:** headers.";
             }
 
             // Analyze each response with neural network
-            const neuralAnalyses = responses.map(resp => this.analyzeWithNeuralNetwork(resp));
+            const neuralAnalyses = responses.map((resp, index) => {
+                console.log(`Analyzing response ${index + 1}:`, resp.model, `(${resp.text?.length || 0} chars)`);
+                return this.analyzeWithNeuralNetwork(resp);
+            });
 
             return this.formatNeuralAnalysis(responses, neuralAnalyses);
 
         } catch (error) {
             console.error("Neural analysis failed:", error);
+            console.error("Error stack:", error.stack);
             throw new Error(`Neural network analysis failed: ${error.message}`);
         }
     }
 
     analyzeWithNeuralNetwork(response) {
+        // Ensure response and response.text exist
+        if (!response || !response.text) {
+            console.warn('Invalid response object:', response);
+            return {
+                model: response?.model || 'Unknown',
+                neuralScore: 0,
+                confidence: 0,
+                coherence: 0,
+                complexity: 0,
+                prediction: "Unable to analyze invalid response"
+            };
+        }
+
         const tokens = this.tokenize(response.text);
 
-        if (tokens.length === 0) {
+        if (tokens.length === 0 || (tokens.length === 1 && tokens[0] === this.vocabulary.wordToIndex['<unk>'])) {
             return {
                 model: response.model,
                 neuralScore: 0,
                 confidence: 0,
                 coherence: 0,
                 complexity: 0,
-                prediction: "Unable to analyze empty response"
+                prediction: "Unable to analyze empty or invalid response"
             };
         }
 
@@ -845,15 +874,26 @@ Models agreed on`;
 
     parseResponses(text) {
         const responses = [];
+
+        if (!text || typeof text !== 'string') {
+            console.warn('Invalid input text to parseResponses:', text);
+            return responses;
+        }
+
         const sections = text.split(/\*\*(CHATGPT|CLAUDE|ASKME):\*\*/i);
 
         for (let i = 1; i < sections.length; i += 2) {
             const model = sections[i]?.trim() || '';
             const content = sections[i + 1]?.trim().substring(0, 300) || '';
             if (content && content.length > 10) {
-                responses.push({ model: model.toUpperCase(), content });
+                responses.push({
+                    model: model.toUpperCase(),
+                    text: content  // Changed from 'content' to 'text' to match neural network expectations
+                });
             }
         }
+
+        console.log('Parsed responses:', responses);
         return responses;
     }
 
