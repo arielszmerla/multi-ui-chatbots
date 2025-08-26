@@ -277,7 +277,7 @@ async function generateSummary() {
 
 async function generateBrowserBasedSummary() {
   if (!isModelLoaded) {
-    throw new Error("Browser LLM not loaded. Please wait for initialization to complete.");
+    throw new Error("Real LLM not loaded. Please wait for DistilGPT-2 model download to complete.");
   }
 
   // Collect all valid responses
@@ -299,12 +299,12 @@ async function generateBrowserBasedSummary() {
   const summary = await generateBrowserSummary(combinedText);
 
   // Format the summary nicely
-  return `<div style="margin-bottom: 10px;"><strong>Browser LLM Analysis:</strong></div>
+  return `<div style="margin-bottom: 10px;"><strong>Real Neural LLM Analysis:</strong></div>
 <div style="padding: 10px; background: #f8f9fa; border-radius: 4px; line-height: 1.5;">
 ${summary}
 </div>
 <div style="margin-top: 10px; font-size: 11px; color: #666;">
-Generated using local browser AI (private, no data sent externally)
+Generated using DistilGPT-2 neural language model (67MB, runs locally, completely private)
 </div>`;
 }
 
