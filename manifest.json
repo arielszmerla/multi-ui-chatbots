@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LLM Comparator",
   "version": "1.0",
-  "description": "Send prompts to ChatGPT, Claude, and AskMe directly via their open tabs",
+  "description": "Send prompts to ChatGPT, Claude, and AskMe directly via their open tabs with local WebLLM support",
   "permissions": [
     "tabs",
     "scripting",
@@ -14,6 +14,9 @@
     "https://askme.mobileye.com/*",
     "https://api.openai.com/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "action": {
     "default_popup": "popup.html"
   },

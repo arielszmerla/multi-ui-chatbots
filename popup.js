@@ -277,7 +277,7 @@ async function generateSummary() {
 
 async function generateBrowserBasedSummary() {
   if (!isModelLoaded) {
-    throw new Error("Browser model not loaded. Please download the model first.");
+    throw new Error("Browser LLM not loaded. Please wait for initialization to complete.");
   }
 
   // Collect all valid responses
@@ -295,16 +295,16 @@ async function generateBrowserBasedSummary() {
   // Combine responses
   const combinedText = `Original Prompt: "${currentPrompt}"\n\nResponses:\n${responses.join('\n\n')}`;
 
-  // Generate summary using browser model
+  // Generate summary using local Browser LLM
   const summary = await generateBrowserSummary(combinedText);
 
   // Format the summary nicely
-  return `<div style="margin-bottom: 10px;"><strong>Browser-Generated Summary:</strong></div>
+  return `<div style="margin-bottom: 10px;"><strong>Browser LLM Analysis:</strong></div>
 <div style="padding: 10px; background: #f8f9fa; border-radius: 4px; line-height: 1.5;">
 ${summary}
 </div>
 <div style="margin-top: 10px; font-size: 11px; color: #666;">
-Generated using local browser model (private, no data sent externally)
+Generated using local browser AI (private, no data sent externally)
 </div>`;
 }
 
@@ -367,37 +367,39 @@ async function callOpenAI(apiKey, prompt) {
 async function initBrowserLLM() {
   if (isModelLoading || isModelLoaded) return;
 
-  // Check if simple summarizer is available
-  if (!window.simpleSummarizer || !window.simpleSummarizer.available) {
-    updateModelStatus("Browser model: Simple summarizer not available");
+  // Check if Browser LLM is available
+  if (!window.browserLLM || !window.browserLLM.available) {
+    updateModelStatus("Browser LLM: Analysis engine not available");
     return;
   }
 
   try {
     isModelLoading = true;
-    updateModelStatus("Initializing browser model...");
+    updateModelStatus("Initializing local analysis engine...");
 
-    // Simulate a small delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Initialize Browser LLM with progress tracking
+    await window.browserLLM.initialize((progressMessage) => {
+      updateModelStatus(`Browser LLM: ${progressMessage}`);
+    });
 
-    // Use the simple summarizer
-    browserSummarizer = window.simpleSummarizer;
+    // Use the local Browser LLM instance
+    browserSummarizer = window.simpleSummarizer; // This uses the browserLLM under the hood
 
     isModelLoaded = true;
     isModelLoading = false;
-    updateModelStatus("Browser model: Ready");
+    updateModelStatus("Browser LLM: Analysis engine ready!");
     updateSummaryButtonState();
 
   } catch (error) {
-    console.error("Error initializing browser model:", error);
+    console.error("Error initializing Browser LLM:", error);
     isModelLoading = false;
-    updateModelStatus("Browser model: Failed to initialize - " + error.message);
+    updateModelStatus(`Browser LLM: Failed to initialize - ${error.message}`);
   }
 }
 
 async function generateBrowserSummary(text) {
   if (!isModelLoaded || !browserSummarizer) {
-    throw new Error("Browser model not loaded");
+    throw new Error("Browser LLM not loaded");
   }
 
   try {
@@ -456,33 +458,40 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize send button state
   updateSendButton();
 
+  // Initialize OpenAI settings visibility based on default summary method
+  const initialMethod = document.getElementById("summary-method").value;
+  const openaiSettings = document.getElementById("openai-settings");
+  if (initialMethod === "browser") {
+    openaiSettings.classList.add("hidden");
+  }
+
   // Summary method selection event listener
   document.getElementById("summary-method").addEventListener("change", (e) => {
     const method = e.target.value;
-    const openaiSettings = document.querySelector(".compact-settings:last-child");
+    const openaiSettings = document.getElementById("openai-settings");
 
     if (method === "browser") {
-      openaiSettings.style.opacity = "0.5";
+      openaiSettings.classList.add("hidden");
       if (!isModelLoaded && !isModelLoading) {
-        updateModelStatus("Browser model: Not downloaded");
+        updateModelStatus("Browser LLM: Analysis engine not initialized yet");
       }
     } else {
-      openaiSettings.style.opacity = "1";
+      openaiSettings.classList.remove("hidden");
     }
 
     updateSummaryButtonState();
   });
 
-  // Listen for simple summarizer loading event
+  // Listen for Browser LLM ready event
   window.addEventListener('simpleSummarizerReady', () => {
-    updateModelStatus("Browser model: Available");
-    // Auto-initialize since simple summarizer is always ready
+    updateModelStatus("Browser LLM: Ready to initialize");
+    // Auto-initialize Browser LLM when ready
     if (!isModelLoaded && !isModelLoading) {
       initBrowserLLM();
     }
   });
 
-  // Initialize browser model immediately if simple summarizer is already available
+  // Initialize Browser LLM immediately if available
   if (window.simpleSummarizer && window.simpleSummarizer.available && !isModelLoaded && !isModelLoading) {
     initBrowserLLM();
   }

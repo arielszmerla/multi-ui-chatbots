@@ -254,28 +254,28 @@
     </div>
   </div>
 
-  <!-- Summary Method Selection -->
-  <div class="compact-settings" style="margin-bottom: 10px;">
-    <div class="flex-small">
-      <span class="api-label">Summary Method:</span>
-      <select id="summary-method"
-        style="padding: 3px 6px; font-size: 11px; border: 1px solid #ddd; border-radius: 2px;">
-        <option value="browser">Browser LLM (Free, Private)</option>
-        <option value="openai">OpenAI API (Better Quality)</option>
-      </select>
-
-    </div>
-    <div id="model-status" class="api-status">Browser model: Initializing...</div>
-  </div>
-
-  <div style="text-align: center; margin: 10px 0;">
-    <button id="generate-summary" class="btn-secondary hidden">Generate Summary</button>
-  </div>
-
   <div class="responses">
     <div class="resp" id="chatgpt"><b>ChatGPT:</b><br></div>
     <div class="resp" id="claude"><b>Claude:</b><br></div>
     <div class="resp" id="askme"><b>AskMe:</b><br></div>
+  </div>
+
+  <!-- Summary Method Selection -->
+  <div class="compact-settings" style="margin-bottom: 10px; margin-top: 15px;">
+    <div class="flex-small">
+      <span class="api-label">Summary Method:</span>
+      <select id="summary-method"
+        style="padding: 3px 6px; font-size: 11px; border: 1px solid #ddd; border-radius: 2px;">
+        <option value="browser">Browser LLM (Free, Private, Local)</option>
+        <option value="openai">OpenAI API (Cloud-based)</option>
+      </select>
+
+    </div>
+    <div id="model-status" class="api-status">Browser LLM: Initializing...</div>
+  </div>
+
+  <div style="text-align: center; margin: 10px 0;">
+    <button id="generate-summary" class="btn-secondary hidden">Generate Summary</button>
   </div>
 
   <div class="summary-section hidden" id="summary-section">
@@ -286,7 +286,7 @@
   </div>
 
   <!-- Compact OpenAI Settings -->
-  <div class="compact-settings">
+  <div class="compact-settings" id="openai-settings">
     <!-- Input mode (when no key is saved) -->
     <div id="api-key-input-mode" class="flex-small">
       <span class="api-label">OpenAI Key:</span>
