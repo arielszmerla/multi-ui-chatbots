@@ -3,6 +3,7 @@
 
 <head>
   <style>
+    /* Base */
     body {
       font-family: sans-serif;
       padding: 10px;
@@ -12,56 +13,117 @@
     textarea {
       width: 100%;
       height: 60px;
+      margin-bottom: 10px;
     }
 
-    .model-selection {
-      margin: 10px 0;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-    }
-
-    .model-selection h4 {
+    h4 {
       margin: 0 0 8px 0;
       font-size: 14px;
     }
 
-    .model-checkboxes {
-      display: flex;
-      gap: 15px;
+    /* Buttons */
+    button {
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
+      background: #f8f9fa;
     }
 
-    .model-checkboxes .model-item {
+    button:hover {
+      background: #e9ecef;
+    }
+
+    .btn-primary {
+      background: #007acc;
+      color: white;
+      border-color: #007acc;
+      font-weight: bold;
+    }
+
+    .btn-primary:hover {
+      background: #005999;
+    }
+
+    .btn-primary:disabled {
+      background: #ccc;
+      color: #666;
+      border-color: #ccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .btn-small {
+      padding: 3px 8px;
+      font-size: 11px;
+    }
+
+    .btn-tiny {
+      padding: 2px 6px;
+      font-size: 10px;
+    }
+
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+      border-color: #6c757d;
+    }
+
+    .btn-secondary:hover {
+      background: #545b62;
+    }
+
+    .btn-large {
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+      border-color: #dc3545;
+    }
+
+    /* Layout */
+    .section {
+      margin: 10px 0;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .flex {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .flex-small {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .flex-1 {
+      flex: 1;
+    }
+
+    /* Models */
+    .model-item {
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .model-checkboxes label {
+    .model-item label {
       display: flex;
       align-items: center;
       gap: 5px;
       cursor: pointer;
     }
 
-    .open-tab-btn {
-      padding: 2px 6px;
-      font-size: 11px;
-      background: #f0f0f0;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .open-tab-btn:hover {
-      background: #e0e0e0;
-    }
-
-    .open-tab-btn:active {
-      background: #d0d0d0;
-    }
-
+    /* Responses */
     .responses {
       display: flex;
       gap: 10px;
@@ -71,8 +133,8 @@
     .resp {
       flex: 1;
       border: 1px solid #ccc;
-      padding: 6px;
-      border-radius: 6px;
+      padding: 8px;
+      border-radius: 4px;
       white-space: pre-wrap;
       overflow-y: auto;
       max-height: 400px;
@@ -80,47 +142,151 @@
 
     .resp.disabled {
       opacity: 0.5;
-      background-color: #f9f9f9;
+      background: #f8f9fa;
+    }
+
+    /* Summary */
+    .summary-section {
+      margin-top: 15px;
+      padding: 10px;
+      border: 2px solid #007acc;
+      border-radius: 4px;
+      background: #f0f8ff;
+      display: none;
+    }
+
+    .summary-section h4 {
+      color: #007acc;
+      font-size: 16px;
+    }
+
+    .summary-content {
+      white-space: pre-wrap;
+      line-height: 1.4;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    /* Settings */
+    .compact-settings {
+      margin-top: 10px;
+      padding: 6px;
+      background: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+
+    .api-input {
+      padding: 3px 6px;
+      font-size: 10px;
+      border: 1px solid #ddd;
+      border-radius: 2px;
+      width: 120px;
+    }
+
+    .api-status {
+      font-size: 9px;
+      color: #666;
+      margin-top: 3px;
+    }
+
+    .api-label {
+      color: #666;
+      font-size: 10px;
+    }
+
+    .api-configured {
+      color: #007acc;
+      font-size: 10px;
+    }
+
+    /* Utilities */
+    .hidden {
+      display: none;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .text-muted {
+      color: #666;
+      font-style: italic;
     }
   </style>
 </head>
 
 <body>
-  <textarea id="prompt" placeholder="Enter your prompt..."></textarea><br>
+  <div class="flex" style="margin-bottom: 10px; align-items: stretch;">
+    <textarea id="prompt" placeholder="Enter your prompt..."
+      style="flex: 1; margin-bottom: 0; margin-right: 10px; resize: vertical;"></textarea>
+    <button id="send" class="btn-primary" disabled>Send</button>
+  </div>
 
-  <div class="model-selection">
+  <div class="section">
     <h4>Select Models:</h4>
-    <div class="model-checkboxes">
+    <div class="flex">
       <div class="model-item">
         <label>
           <input type="checkbox" id="enable-chatgpt" name="model" value="chatgpt">
           ChatGPT
         </label>
-        <button class="open-tab-btn" data-url="https://chatgpt.com" title="Open ChatGPT tab">Open Tab</button>
+        <button class="btn-small" data-url="https://chatgpt.com" title="Open ChatGPT tab">Open Tab</button>
       </div>
       <div class="model-item">
         <label>
           <input type="checkbox" id="enable-claude" name="model" value="claude">
           Claude
         </label>
-        <button class="open-tab-btn" data-url="https://claude.ai" title="Open Claude tab">Open Tab</button>
+        <button class="btn-small" data-url="https://claude.ai" title="Open Claude tab">Open Tab</button>
       </div>
       <div class="model-item">
         <label>
           <input type="checkbox" id="enable-askme" name="model" value="askme" checked>
           AskMe
         </label>
-        <button class="open-tab-btn" data-url="https://askme.mobileye.com" title="Open AskMe tab">Open Tab</button>
+        <button class="btn-small" data-url="https://askme.mobileye.com" title="Open AskMe tab">Open Tab</button>
       </div>
     </div>
   </div>
 
-  <button id="send">Send</button>
+  <div style="text-align: center; margin: 10px 0;">
+    <button id="generate-summary" class="btn-secondary hidden">Generate Summary</button>
+  </div>
+
   <div class="responses">
     <div class="resp" id="chatgpt"><b>ChatGPT:</b><br></div>
     <div class="resp" id="claude"><b>Claude:</b><br></div>
     <div class="resp" id="askme"><b>AskMe:</b><br></div>
   </div>
+
+  <div class="summary-section hidden" id="summary-section">
+    <h4>AI Summary & Analysis</h4>
+    <div class="summary-content" id="summary-content">
+      <div class="text-center text-muted">Generating summary...</div>
+    </div>
+  </div>
+
+  <!-- Compact OpenAI Settings -->
+  <div class="compact-settings">
+    <!-- Input mode (when no key is saved) -->
+    <div id="api-key-input-mode" class="flex-small">
+      <span class="api-label">OpenAI Key:</span>
+      <input type="password" id="openai-api-key" class="api-input" placeholder="sk-...">
+      <button id="save-api-key" class="btn-tiny btn-primary">Save</button>
+    </div>
+
+    <!-- Saved mode (when key is configured) -->
+    <div id="api-key-saved-mode" class="flex-small hidden">
+      <span class="api-configured">OpenAI Key Configured</span>
+      <button id="change-api-key" class="btn-tiny">Change</button>
+      <button id="remove-api-key" class="btn-tiny btn-danger">Remove</button>
+    </div>
+
+    <div class="api-status" id="api-status">API key not configured</div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 
