@@ -367,18 +367,21 @@ async function callOpenAI(apiKey, prompt) {
 async function initBrowserLLM() {
   if (isModelLoading || isModelLoaded) return;
 
-  // Check if Transformers.js is available
-  if (typeof window.transformersPipeline === 'undefined') {
-    updateModelStatus("Browser model: Transformers.js not available");
+  // Check if simple summarizer is available
+  if (!window.simpleSummarizer || !window.simpleSummarizer.available) {
+    updateModelStatus("Browser model: Simple summarizer not available");
     return;
   }
 
   try {
     isModelLoading = true;
-    updateModelStatus("Downloading model... (this may take a few minutes)");
+    updateModelStatus("Initializing browser model...");
 
-    // Use a lightweight summarization model
-    browserSummarizer = await window.transformersPipeline('summarization', 'Xenova/distilbart-cnn-6-6');
+    // Simulate a small delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Use the simple summarizer
+    browserSummarizer = window.simpleSummarizer;
 
     isModelLoaded = true;
     isModelLoading = false;
@@ -386,32 +389,21 @@ async function initBrowserLLM() {
     updateSummaryButtonState();
 
   } catch (error) {
-    console.error("Error loading browser model:", error);
+    console.error("Error initializing browser model:", error);
     isModelLoading = false;
-    updateModelStatus("Browser model: Failed to load - " + error.message);
+    updateModelStatus("Browser model: Failed to initialize - " + error.message);
   }
 }
 
 async function generateBrowserSummary(text) {
-  if (!isModelLoaded) {
+  if (!isModelLoaded || !browserSummarizer) {
     throw new Error("Browser model not loaded");
   }
 
   try {
-    // Split text into chunks if too long (model limit ~1024 tokens)
-    const maxLength = 1000;
-    const chunks = text.length > maxLength ?
-      [text.substring(0, maxLength)] : [text];
-
-    const summaries = await Promise.all(
-      chunks.map(chunk => browserSummarizer(chunk, {
-        max_length: 150,
-        min_length: 50,
-        do_sample: false
-      }))
-    );
-
-    return summaries.map(s => s.summary_text).join(' ');
+    // Use our simple summarizer
+    const summary = browserSummarizer.summarize(text);
+    return summary;
 
   } catch (error) {
     console.error("Error generating browser summary:", error);
@@ -467,44 +459,28 @@ document.addEventListener('DOMContentLoaded', () => {
   // Summary method selection event listener
   document.getElementById("summary-method").addEventListener("change", (e) => {
     const method = e.target.value;
-    const downloadBtn = document.getElementById("download-model");
     const openaiSettings = document.querySelector(".compact-settings:last-child");
 
     if (method === "browser") {
-      downloadBtn.classList.remove("hidden");
       openaiSettings.style.opacity = "0.5";
       if (!isModelLoaded && !isModelLoading) {
         updateModelStatus("Browser model: Not downloaded");
       }
     } else {
-      downloadBtn.classList.add("hidden");
       openaiSettings.style.opacity = "1";
     }
 
     updateSummaryButtonState();
   });
 
-  // Download model button event listener
-  document.getElementById("download-model").addEventListener("click", async () => {
-    if (!isModelLoading && !isModelLoaded) {
-      await initBrowserLLM();
+  // Listen for simple summarizer loading event
+  window.addEventListener('simpleSummarizerReady', () => {
+    updateModelStatus("Browser model: Available");
+    // Auto-initialize since simple summarizer is always ready
+    if (!isModelLoaded && !isModelLoading) {
+      initBrowserLLM();
     }
   });
-
-  // Initialize summary method UI
-  const initialMethod = document.getElementById("summary-method").value;
-  if (initialMethod === "browser") {
-    document.getElementById("download-model").classList.remove("hidden");
-  }
-
-  // Check if Transformers.js is available
-  setTimeout(() => {
-    if (typeof window.transformersPipeline === 'undefined') {
-      updateModelStatus("Browser model: Transformers.js not loaded");
-      document.getElementById("summary-method").value = "openai";
-      document.getElementById("download-model").classList.add("hidden");
-    }
-  }, 2000); // Give time for library to load
 
   const checkboxes = document.querySelectorAll('input[name="model"]');
   checkboxes.forEach(checkbox => {
