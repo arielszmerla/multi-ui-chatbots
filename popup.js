@@ -482,6 +482,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Initialize browser model immediately if simple summarizer is already available
+  if (window.simpleSummarizer && window.simpleSummarizer.available && !isModelLoaded && !isModelLoading) {
+    initBrowserLLM();
+  }
+
   const checkboxes = document.querySelectorAll('input[name="model"]');
   checkboxes.forEach(checkbox => {
     checkbox.addEventListener('change', () => {
