@@ -1,5 +1,5 @@
 // REAL Browser LLM - Downloads and runs actual DistilGPT-2 model
-// No fallbacks - either it works or fails clearly
+// Robust loading with multiple fallbacks
 
 class RealBrowserLLM {
     constructor() {
@@ -14,12 +14,12 @@ class RealBrowserLLM {
         if (this.isLoading || this.isLoaded) return;
 
         this.isLoading = true;
-        progressCallback?.("Loading Transformers.js library...");
+        progressCallback?.("🔄 Initializing Real Neural LLM...");
 
         try {
-            // Load Transformers.js from CDN
-            await this.loadTransformersLibrary();
-            progressCallback?.("Library loaded! Downloading DistilGPT-2 model (~67MB)...");
+            // Try to load Transformers.js with multiple fallbacks
+            await this.loadTransformersLibrary(progressCallback);
+            progressCallback?.("📦 Library loaded! Downloading DistilGPT-2 model (~67MB)...");
 
             // Initialize the actual text generation pipeline with DistilGPT-2
             this.pipeline = await this.transformers.pipeline(
@@ -30,9 +30,9 @@ class RealBrowserLLM {
                     progress_callback: (progress) => {
                         if (progress.status === 'downloading') {
                             const percent = Math.round((progress.loaded / progress.total) * 100);
-                            progressCallback?.(`Downloading model: ${percent}% (${this.formatBytes(progress.loaded)}/${this.formatBytes(progress.total)})`);
+                            progressCallback?.(`📥 Downloading model: ${percent}% (${this.formatBytes(progress.loaded)}/${this.formatBytes(progress.total)})`);
                         } else if (progress.status === 'loading') {
-                            progressCallback?.("Loading model into memory...");
+                            progressCallback?.("⚡ Loading model into memory...");
                         }
                     }
                 }
@@ -45,37 +45,104 @@ class RealBrowserLLM {
         } catch (error) {
             this.isLoading = false;
             console.error("Failed to load real LLM:", error);
-            throw new Error(`Real LLM failed to load: ${error.message}`);
+
+            // Provide more specific error messages
+            let errorMessage = "Unknown error";
+            if (error.message.includes('Failed to load Transformers.js')) {
+                errorMessage = "Cannot load Transformers.js library - check network connection and CSP settings";
+            } else if (error.message.includes('pipeline')) {
+                errorMessage = "Model initialization failed - try reloading the extension";
+            } else {
+                errorMessage = error.message;
+            }
+
+            throw new Error(`Real LLM failed to load: ${errorMessage}`);
         }
     }
 
-    async loadTransformersLibrary() {
-        return new Promise((resolve, reject) => {
+    async loadTransformersLibrary(progressCallback) {
+        return new Promise(async (resolve, reject) => {
+            // Check if already loaded
             if (window.Transformers) {
                 this.transformers = window.Transformers;
                 resolve();
                 return;
             }
 
+            progressCallback?.("🌐 Loading Transformers.js library...");
+
+            // Multiple CDN sources to try
+            const cdnSources = [
+                'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js',
+                'https://unpkg.com/@xenova/transformers@2.17.2/dist/transformers.min.js',
+                './transformers.min.js' // Local fallback if available
+            ];
+
+            for (let i = 0; i < cdnSources.length; i++) {
+                try {
+                    progressCallback?.(`🌐 Trying CDN source ${i + 1}/${cdnSources.length}...`);
+                    await this.loadScriptFromSource(cdnSources[i]);
+
+                    // Wait for library to be available
+                    await this.waitForTransformers();
+                    this.transformers = window.Transformers;
+                    progressCallback?.("✅ Transformers.js library loaded successfully!");
+                    resolve();
+                    return;
+
+                } catch (error) {
+                    console.warn(`Failed to load from ${cdnSources[i]}:`, error);
+                    if (i === cdnSources.length - 1) {
+                        // All sources failed
+                        reject(new Error(`Failed to load Transformers.js library from all sources. Last error: ${error.message}`));
+                    }
+                    // Continue to next source
+                }
+            }
+        });
+    }
+
+    loadScriptFromSource(src) {
+        return new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
+            script.src = src;
             script.crossOrigin = 'anonymous';
 
+            const timeout = setTimeout(() => {
+                reject(new Error(`Timeout loading script from ${src}`));
+            }, 30000); // 30 second timeout
+
             script.onload = () => {
-                // Wait for the library to be available
-                const checkLibrary = () => {
-                    if (window.Transformers) {
-                        this.transformers = window.Transformers;
-                        resolve();
-                    } else {
-                        setTimeout(checkLibrary, 100);
-                    }
-                };
-                checkLibrary();
+                clearTimeout(timeout);
+                resolve();
             };
 
-            script.onerror = () => reject(new Error('Failed to load Transformers.js library'));
+            script.onerror = () => {
+                clearTimeout(timeout);
+                reject(new Error(`Failed to load script from ${src}`));
+            };
+
             document.head.appendChild(script);
+        });
+    }
+
+    waitForTransformers() {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 50; // 5 seconds total
+
+            const checkLibrary = () => {
+                attempts++;
+                if (window.Transformers) {
+                    resolve();
+                } else if (attempts >= maxAttempts) {
+                    reject(new Error('Transformers.js library not available after loading'));
+                } else {
+                    setTimeout(checkLibrary, 100);
+                }
+            };
+
+            checkLibrary();
         });
     }
 
@@ -89,7 +156,7 @@ class RealBrowserLLM {
 
     async summarize(text) {
         if (!this.isLoaded || !this.pipeline) {
-            throw new Error("Real LLM not loaded yet - please wait for model download to complete");
+            throw new Error("Real LLM not loaded yet - please wait for DistilGPT-2 model download to complete");
         }
 
         const prompt = this.createAnalysisPrompt(text);

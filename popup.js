@@ -375,6 +375,8 @@ async function initBrowserLLM() {
 
   try {
     isModelLoading = true;
+    // Hide manual download button since we're starting
+    document.getElementById("download-model-btn").style.display = "none";
     updateModelStatus("Loading Transformers.js library...");
 
     // Initialize Real Browser LLM with progress tracking
@@ -485,7 +487,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // Listen for Real Neural LLM ready event
   window.addEventListener('simpleSummarizerReady', () => {
     updateModelStatus("Real Neural LLM: Ready to download model");
+    // Show manual download button as backup
+    document.getElementById("download-model-btn").style.display = "inline-block";
+
     // Auto-initialize Real Neural LLM when ready
+    console.log("SimpleSummarizerReady event fired, isModelLoaded:", isModelLoaded, "isModelLoading:", isModelLoading);
+    if (!isModelLoaded && !isModelLoading) {
+      console.log("Starting initBrowserLLM...");
+      setTimeout(() => initBrowserLLM(), 500); // Small delay to ensure everything is ready
+    }
+  });
+
+  // Manual download button handler
+  document.getElementById("download-model-btn").addEventListener("click", () => {
+    console.log("Manual download button clicked");
+    document.getElementById("download-model-btn").style.display = "none";
     if (!isModelLoaded && !isModelLoading) {
       initBrowserLLM();
     }
