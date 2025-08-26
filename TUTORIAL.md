@@ -21,9 +21,14 @@
 - **Speed**: Instant after 2-second initialization
 
 ### ☁️ OpenAI API
-- **How**: Change dropdown to "OpenAI API (Cloud-based)" → Enter API key in field that appears → Click "Save"
-- **Cost**: ~$0.001 per summary (you need OpenAI account)
-- **Quality**: Slightly more detailed analysis
+**What you need to do:**
+1. **Get OpenAI account**: Go to https://platform.openai.com → Sign up → Add payment method
+2. **Get API key**: Go to https://platform.openai.com/api-keys → Click "Create new secret key" → Copy it
+3. **Enter key in extension**: Change dropdown to "OpenAI API (Cloud-based)" → Paste your API key in the field that appears → Click "Save"
+4. **Use normally**: Generate summaries as usual - your key will be used automatically
+
+- **Cost**: ~$0.001 per summary (charged to your OpenAI account)
+- **Quality**: More detailed language model analysis
 
 ## 4. Pro Tips
 - **Open tabs first**: Extension can't work without open ChatGPT/Claude/AskMe tabs
