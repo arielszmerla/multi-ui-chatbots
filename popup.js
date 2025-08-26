@@ -893,22 +893,36 @@ async function sendPromptAndScrape(prompt, who) {
     // Wait a moment for the UI to update
     await new Promise(r => setTimeout(r, 500));
 
-    // Try to find submit button
+    // Try to find submit button with comprehensive AskMe-specific selectors
     const submitButton = document.querySelector('button[aria-label="Send Message"]') ||
       document.querySelector('button[data-testid="send-button"]') ||
+      document.querySelector('button[title*="Send"]') ||
+      document.querySelector('button[type="submit"]') ||
       document.querySelector('svg[data-icon="send"]')?.closest('button') ||
-      document.querySelector('button:not([disabled])') &&
-      Array.from(document.querySelectorAll('button:not([disabled])')).find(btn =>
-        btn.textContent.includes('Send') || btn.getAttribute('aria-label')?.includes('Send'));
+      document.querySelector('[data-testid="send-icon"]')?.closest('button') ||
+      document.querySelector('[class*="send"]')?.closest('button') ||
+      document.querySelector('[class*="submit"]')?.closest('button') ||
+      document.querySelector('button[class*="primary"]') ||
+      Array.from(document.querySelectorAll('button:not([disabled])')).find(btn => {
+        const text = btn.textContent?.toLowerCase()?.trim() || '';
+        const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+        const className = btn.className?.toLowerCase() || '';
+        return text.includes('send') || text.includes('submit') || text === 'go' ||
+          ariaLabel.includes('send') || ariaLabel.includes('submit') ||
+          className.includes('send') || className.includes('submit');
+      });
     console.log("AskMe submit button found:", !!submitButton);
 
     if (submitButton && !submitButton.disabled) {
+      console.log("Clicking AskMe submit button");
       submitButton.click();
     } else {
-      // Simulate Enter key press
-      const activeElement = askmeInputP || document.querySelector("textarea");
+      // Simulate comprehensive Enter key sequence
+      const activeElement = askmeInputP || document.querySelector("textarea") || document.querySelector('.ProseMirror');
+      console.log("AskMe trying Enter key on element:", !!activeElement);
       if (activeElement) {
-        const enterEvent = new KeyboardEvent('keydown', {
+        // Complete key event sequence
+        const keyDownEvent = new KeyboardEvent('keydown', {
           key: 'Enter',
           keyCode: 13,
           which: 13,
@@ -916,16 +930,45 @@ async function sendPromptAndScrape(prompt, who) {
           cancelable: true,
           composed: true
         });
-        activeElement.dispatchEvent(enterEvent);
+
+        const keyPressEvent = new KeyboardEvent('keypress', {
+          key: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true
+        });
+
+        const keyUpEvent = new KeyboardEvent('keyup', {
+          key: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true
+        });
+
+        activeElement.dispatchEvent(keyDownEvent);
+        activeElement.dispatchEvent(keyPressEvent);
+        activeElement.dispatchEvent(keyUpEvent);
+        console.log("AskMe Enter key events dispatched");
       }
     }
 
-    // Alternative: retry send button after content is set
-    await new Promise(r => setTimeout(r, 100));
-    const sendButtonRetry = document.querySelector('button[aria-label*="Send"]:not([disabled])');
-    if (sendButtonRetry) {
-      console.log("Retrying AskMe send button click");
-      sendButtonRetry.click();
+    // Multiple retry attempts for AskMe
+    for (let retry = 0; retry < 3; retry++) {
+      await new Promise(r => setTimeout(r, 200));
+
+      const sendButtonRetry = document.querySelector('button[aria-label*="Send"]:not([disabled])') ||
+        document.querySelector('button[title*="Send"]:not([disabled])') ||
+        Array.from(document.querySelectorAll('button:not([disabled])')).find(btn =>
+          btn.textContent?.toLowerCase().includes('send')
+        );
+
+      if (sendButtonRetry) {
+        console.log(`AskMe retry ${retry + 1}: Clicking send button`);
+        sendButtonRetry.click();
+        break;
+      }
     }
 
     await new Promise(r => setTimeout(r, 8000));
