@@ -2,6 +2,11 @@
 let collectedResponses = {};
 let currentPrompt = "";
 
+// Browser LLM variables
+let browserSummarizer = null;
+let isModelLoaded = false;
+let isModelLoading = false;
+
 document.getElementById("send").addEventListener("click", async () => {
   const prompt = document.getElementById("prompt").value;
   currentPrompt = prompt;
@@ -69,7 +74,7 @@ document.getElementById("send").addEventListener("click", async () => {
   await Promise.all(processingPromises);
 
   // Show summary button if we have responses and API key is configured
-  checkAndShowSummaryButton();
+  updateSummaryButtonState();
 });
 
 // Summary functionality
@@ -93,7 +98,7 @@ document.getElementById("openai-api-key").addEventListener("input", (e) => {
   }, 1000); // Save after 1 second of no typing
 
   // Update button visibility immediately
-  checkAndShowSummaryButton();
+  updateSummaryButtonState();
 });
 
 // Manual save button
@@ -148,7 +153,7 @@ async function saveApiKey(apiKey) {
         showInputMode();
       }
     }
-    checkAndShowSummaryButton();
+    updateSummaryButtonState();
   } catch (error) {
     console.error("Error saving API key:", error);
     updateApiStatus(`Error saving API key: ${error.message}`);
@@ -180,7 +185,7 @@ async function loadApiKey() {
       updateApiStatus("API key configured");
       showSavedMode();
       // Check if we should show summary button
-      checkAndShowSummaryButton();
+      updateSummaryButtonState();
     } else {
       updateApiStatus("API key not configured");
       showInputMode();
@@ -221,25 +226,11 @@ function showInputModeWithCurrentKey() {
 }
 
 function checkAndShowSummaryButton() {
-  const hasResponses = Object.keys(collectedResponses).length > 0;
-  const hasValidResponses = Object.values(collectedResponses).some(response =>
-    response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")
-  );
-  const hasApiKey = document.getElementById("openai-api-key").value.trim().length > 0;
-
-  if (hasResponses && hasValidResponses && hasApiKey) {
-    document.getElementById("generate-summary").classList.remove("hidden");
-  } else {
-    document.getElementById("generate-summary").classList.add("hidden");
-  }
+  updateSummaryButtonState();
 }
 
 async function generateSummary() {
-  const apiKey = document.getElementById("openai-api-key").value.trim();
-  if (!apiKey) {
-    alert("Please configure your OpenAI API key first.");
-    return;
-  }
+  const method = document.getElementById("summary-method").value;
 
   // Show summary section and loading state
   const summarySection = document.getElementById("summary-section");
@@ -254,11 +245,22 @@ async function generateSummary() {
   summaryButton.textContent = "Generating...";
 
   try {
-    // Prepare the prompt for summarization
-    const summaryPrompt = createSummaryPrompt();
+    let summary;
 
-    // Call OpenAI API
-    const summary = await callOpenAI(apiKey, summaryPrompt);
+    if (method === "browser") {
+      summary = await generateBrowserBasedSummary();
+    } else if (method === "openai") {
+      const apiKey = document.getElementById("openai-api-key").value.trim();
+      if (!apiKey) {
+        throw new Error("Please configure your OpenAI API key first.");
+      }
+
+      // Prepare the prompt for summarization
+      const summaryPrompt = createSummaryPrompt();
+
+      // Call OpenAI API
+      summary = await callOpenAI(apiKey, summaryPrompt);
+    }
 
     // Display the summary
     summaryContent.innerHTML = summary;
@@ -271,6 +273,39 @@ async function generateSummary() {
     summaryButton.disabled = false;
     summaryButton.textContent = "Regenerate Summary";
   }
+}
+
+async function generateBrowserBasedSummary() {
+  if (!isModelLoaded) {
+    throw new Error("Browser model not loaded. Please download the model first.");
+  }
+
+  // Collect all valid responses
+  const responses = [];
+  for (const [model, response] of Object.entries(collectedResponses)) {
+    if (response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")) {
+      responses.push(`**${model.toUpperCase()}:** ${response}`);
+    }
+  }
+
+  if (responses.length === 0) {
+    throw new Error("No valid responses to summarize");
+  }
+
+  // Combine responses
+  const combinedText = `Original Prompt: "${currentPrompt}"\n\nResponses:\n${responses.join('\n\n')}`;
+
+  // Generate summary using browser model
+  const summary = await generateBrowserSummary(combinedText);
+
+  // Format the summary nicely
+  return `<div style="margin-bottom: 10px;"><strong>Browser-Generated Summary:</strong></div>
+<div style="padding: 10px; background: #f8f9fa; border-radius: 4px; line-height: 1.5;">
+${summary}
+</div>
+<div style="margin-top: 10px; font-size: 11px; color: #666;">
+Generated using local browser model (private, no data sent externally)
+</div>`;
 }
 
 function createSummaryPrompt() {
@@ -328,6 +363,89 @@ async function callOpenAI(apiKey, prompt) {
   return data.choices[0].message.content;
 }
 
+// Browser LLM Functions
+async function initBrowserLLM() {
+  if (isModelLoading || isModelLoaded) return;
+
+  // Check if Transformers.js is available
+  if (typeof window.transformersPipeline === 'undefined') {
+    updateModelStatus("Browser model: Transformers.js not available");
+    return;
+  }
+
+  try {
+    isModelLoading = true;
+    updateModelStatus("Downloading model... (this may take a few minutes)");
+
+    // Use a lightweight summarization model
+    browserSummarizer = await window.transformersPipeline('summarization', 'Xenova/distilbart-cnn-6-6');
+
+    isModelLoaded = true;
+    isModelLoading = false;
+    updateModelStatus("Browser model: Ready");
+    updateSummaryButtonState();
+
+  } catch (error) {
+    console.error("Error loading browser model:", error);
+    isModelLoading = false;
+    updateModelStatus("Browser model: Failed to load - " + error.message);
+  }
+}
+
+async function generateBrowserSummary(text) {
+  if (!isModelLoaded) {
+    throw new Error("Browser model not loaded");
+  }
+
+  try {
+    // Split text into chunks if too long (model limit ~1024 tokens)
+    const maxLength = 1000;
+    const chunks = text.length > maxLength ?
+      [text.substring(0, maxLength)] : [text];
+
+    const summaries = await Promise.all(
+      chunks.map(chunk => browserSummarizer(chunk, {
+        max_length: 150,
+        min_length: 50,
+        do_sample: false
+      }))
+    );
+
+    return summaries.map(s => s.summary_text).join(' ');
+
+  } catch (error) {
+    console.error("Error generating browser summary:", error);
+    throw error;
+  }
+}
+
+function updateModelStatus(status) {
+  document.getElementById("model-status").textContent = status;
+}
+
+function updateSummaryButtonState() {
+  const method = document.getElementById("summary-method").value;
+  const hasResponses = Object.keys(collectedResponses).length > 0;
+  const hasValidResponses = Object.values(collectedResponses).some(response =>
+    response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")
+  );
+
+  let canSummarize = false;
+
+  if (method === "browser") {
+    canSummarize = hasResponses && hasValidResponses && isModelLoaded;
+  } else if (method === "openai") {
+    const hasApiKey = document.getElementById("openai-api-key").value.trim().length > 0;
+    canSummarize = hasResponses && hasValidResponses && hasApiKey;
+  }
+
+  if (canSummarize) {
+    document.getElementById("generate-summary").classList.remove("hidden");
+  } else {
+    document.getElementById("generate-summary").classList.add("hidden");
+  }
+}
+
 // Enable/disable send button based on prompt input
 function updateSendButton() {
   const prompt = document.getElementById("prompt").value.trim();
@@ -345,6 +463,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize send button state
   updateSendButton();
+
+  // Summary method selection event listener
+  document.getElementById("summary-method").addEventListener("change", (e) => {
+    const method = e.target.value;
+    const downloadBtn = document.getElementById("download-model");
+    const openaiSettings = document.querySelector(".compact-settings:last-child");
+
+    if (method === "browser") {
+      downloadBtn.classList.remove("hidden");
+      openaiSettings.style.opacity = "0.5";
+      if (!isModelLoaded && !isModelLoading) {
+        updateModelStatus("Browser model: Not downloaded");
+      }
+    } else {
+      downloadBtn.classList.add("hidden");
+      openaiSettings.style.opacity = "1";
+    }
+
+    updateSummaryButtonState();
+  });
+
+  // Download model button event listener
+  document.getElementById("download-model").addEventListener("click", async () => {
+    if (!isModelLoading && !isModelLoaded) {
+      await initBrowserLLM();
+    }
+  });
+
+  // Initialize summary method UI
+  const initialMethod = document.getElementById("summary-method").value;
+  if (initialMethod === "browser") {
+    document.getElementById("download-model").classList.remove("hidden");
+  }
+
+  // Check if Transformers.js is available
+  setTimeout(() => {
+    if (typeof window.transformersPipeline === 'undefined') {
+      updateModelStatus("Browser model: Transformers.js not loaded");
+      document.getElementById("summary-method").value = "openai";
+      document.getElementById("download-model").classList.add("hidden");
+    }
+  }, 2000); // Give time for library to load
 
   const checkboxes = document.querySelectorAll('input[name="model"]');
   checkboxes.forEach(checkbox => {

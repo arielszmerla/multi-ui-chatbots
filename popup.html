@@ -251,6 +251,20 @@
     </div>
   </div>
 
+  <!-- Summary Method Selection -->
+  <div class="compact-settings" style="margin-bottom: 10px;">
+    <div class="flex-small">
+      <span class="api-label">Summary Method:</span>
+      <select id="summary-method"
+        style="padding: 3px 6px; font-size: 11px; border: 1px solid #ddd; border-radius: 2px;">
+        <option value="browser">Browser LLM (Free, Private)</option>
+        <option value="openai">OpenAI API (Better Quality)</option>
+      </select>
+      <button id="download-model" class="btn-tiny hidden" title="Download browser model">Download Model</button>
+    </div>
+    <div id="model-status" class="api-status">Browser model: Not downloaded</div>
+  </div>
+
   <div style="text-align: center; margin: 10px 0;">
     <button id="generate-summary" class="btn-secondary hidden">Generate Summary</button>
   </div>
@@ -287,6 +301,7 @@
     <div class="api-status" id="api-status">API key not configured</div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
   <script src="popup.js"></script>
 </body>
 

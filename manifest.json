@@ -12,8 +12,13 @@
     "https://chatgpt.com/*",
     "https://claude.ai/*",
     "https://askme.mobileye.com/*",
-    "https://api.openai.com/*"
+    "https://api.openai.com/*",
+    "https://cdn.jsdelivr.net/*",
+    "https://huggingface.co/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://cdn.jsdelivr.net; object-src 'self'"
+  },
   "action": {
     "default_popup": "popup.html"
   },
