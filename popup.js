@@ -449,9 +449,12 @@ document.addEventListener('DOMContentLoaded', () => {
       init() {
         document.querySelectorAll('input[name="model"]').forEach(checkbox => {
           const updateUI = () => {
-            const status = checkbox.checked ? 'Ready' : 'Not selected';
-            ResponseUI.setEnabled(checkbox.value, checkbox.checked);
-            if (checkbox.checked) ResponseUI.updateStatus(checkbox.value, status);
+            if (checkbox.checked) {
+              ResponseUI.setEnabled(checkbox.value, true);
+              ResponseUI.updateStatus(checkbox.value, 'Ready');
+            } else {
+              ResponseUI.setEnabled(checkbox.value, false);
+            }
           };
 
           checkbox.addEventListener('change', updateUI);
