@@ -473,29 +473,34 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize send button state
   updateSendButton();
 
-  // Initialize OpenAI settings visibility based on default summary method
-  const initialMethod = document.getElementById("summary-method").value;
-  const openaiSettings = document.getElementById("openai-settings");
-  if (initialMethod === "browser") {
-    openaiSettings.classList.add("hidden");
-  }
-
-  // Summary method selection event listener
-  document.getElementById("summary-method").addEventListener("change", (e) => {
-    const method = e.target.value;
-    const openaiSettings = document.getElementById("openai-settings");
-
-    if (method === "browser") {
-      openaiSettings.classList.add("hidden");
-      if (!isModelLoaded && !isModelLoading) {
-        updateModelStatus("Real Neural LLM: Model not downloaded yet");
+  // Summary method handling utility
+  const SummaryMethodManager = {
+    toggleOpenAISettings(method) {
+      const openaiSettings = DOM.get("openai-settings");
+      if (method === "browser") {
+        openaiSettings.classList.add("hidden");
+        if (!isModelLoaded && !isModelLoading) {
+          updateModelStatus("Real Neural LLM: Model not downloaded yet");
+        }
+      } else {
+        openaiSettings.classList.remove("hidden");
       }
-    } else {
-      openaiSettings.classList.remove("hidden");
-    }
+    },
 
-    updateSummaryButtonState();
-  });
+    init() {
+      // Initialize OpenAI settings visibility
+      const initialMethod = DOM.get("summary-method").value;
+      this.toggleOpenAISettings(initialMethod);
+
+      // Summary method selection event listener
+      DOM.get("summary-method").addEventListener("change", (e) => {
+        this.toggleOpenAISettings(e.target.value);
+        updateSummaryButtonState();
+      });
+    }
+  };
+
+  SummaryMethodManager.init();
 
   // Listen for Real Neural LLM ready event
   window.addEventListener('simpleSummarizerReady', () => {
@@ -516,36 +521,34 @@ document.addEventListener('DOMContentLoaded', () => {
     initBrowserLLM();
   }
 
-  const checkboxes = document.querySelectorAll('input[name="model"]');
-  checkboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', () => {
-      const responseDiv = document.getElementById(checkbox.value);
+  // Model checkbox manager
+  const ModelCheckboxManager = {
+    updateModelUI(checkbox) {
+      const status = checkbox.checked ? 'Ready' : 'Not selected';
+      ResponseUI.setEnabled(checkbox.value, checkbox.checked);
       if (checkbox.checked) {
-        responseDiv.classList.remove('disabled');
-        responseDiv.innerHTML = `<b>${checkbox.value}:</b><br>Ready`;
-      } else {
-        responseDiv.classList.add('disabled');
-        responseDiv.innerHTML = `<b>${checkbox.value}:</b><br>Not selected`;
+        ResponseUI.updateStatus(checkbox.value, status);
       }
-    });
-  });
+    },
 
-  // Initialize the visual state
-  checkboxes.forEach(checkbox => {
-    const responseDiv = document.getElementById(checkbox.value);
-    if (checkbox.checked) {
-      responseDiv.classList.remove('disabled');
-      responseDiv.innerHTML = `<b>${checkbox.value}:</b><br>Ready`;
-    } else {
-      responseDiv.classList.add('disabled');
-      responseDiv.innerHTML = `<b>${checkbox.value}:</b><br>Not selected`;
+    init() {
+      const checkboxes = document.querySelectorAll('input[name="model"]');
+
+      // Add event listeners
+      checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => this.updateModelUI(checkbox));
+      });
+
+      // Initialize visual state
+      checkboxes.forEach(checkbox => this.updateModelUI(checkbox));
     }
-  });
+  };
 
-  // Add event listeners for "Open Tab" buttons
-  const openTabButtons = document.querySelectorAll('.btn-small[data-url]');
-  openTabButtons.forEach(button => {
-    button.addEventListener('click', async () => {
+  ModelCheckboxManager.init();
+
+  // Open tab manager
+  const OpenTabManager = {
+    async handleTabOpen(button) {
       const url = button.getAttribute('data-url');
       const modelName = button.parentElement.querySelector('label').textContent.trim();
 
@@ -562,25 +565,35 @@ document.addEventListener('DOMContentLoaded', () => {
           await chrome.tabs.create({ url: url, active: true });
         }
 
-        // Brief visual feedback
-        button.textContent = 'Opened!';
-        button.style.background = '#90EE90';
-        setTimeout(() => {
-          button.textContent = 'Open Tab';
-          button.style.background = '';
-        }, 1000);
-
+        this.showFeedback(button, 'Opened!', '#90EE90');
       } catch (error) {
         console.error(`Error opening ${modelName} tab:`, error);
-        button.textContent = 'Error';
-        button.style.background = '#FFB6C1';
-        setTimeout(() => {
-          button.textContent = 'Open Tab';
-          button.style.background = '';
-        }, 1000);
+        this.showFeedback(button, 'Error', '#FFB6C1');
       }
-    });
-  });
+    },
+
+    showFeedback(button, text, color) {
+      const originalText = button.textContent;
+      const originalBackground = button.style.background;
+
+      button.textContent = text;
+      button.style.background = color;
+
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.style.background = originalBackground;
+      }, 1000);
+    },
+
+    init() {
+      const openTabButtons = document.querySelectorAll('.btn-small[data-url]');
+      openTabButtons.forEach(button => {
+        button.addEventListener('click', () => this.handleTabOpen(button));
+      });
+    }
+  };
+
+  OpenTabManager.init();
 });
 
 // Runs inside the target page
