@@ -543,24 +543,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// AI Service Handlers (extracted from sendPromptAndScrape)
-const AIServiceHandlers = {
-  // Common utilities for all services
-  async setPromptText(element, prompt) {
+
+
+// Runs inside the target page
+async function sendPromptAndScrape(prompt, who) {
+  // Helper functions for all services
+  async function setPromptText(element, prompt) {
     if (element.tagName === 'TEXTAREA') {
       element.value = prompt;
       element.dispatchEvent(new Event("input", { bubbles: true }));
     } else {
-      // For contenteditable elements
       element.textContent = prompt;
       element.dispatchEvent(new Event("input", { bubbles: true }));
       element.dispatchEvent(new Event("change", { bubbles: true }));
     }
     element.focus();
-  },
+  }
 
-  async triggerSubmit(element, submitSelectors) {
-    // Try to find submit button
+  async function triggerSubmit(element, submitSelectors) {
     let submitButton = null;
     for (const selector of submitSelectors) {
       submitButton = document.querySelector(selector);
@@ -572,16 +572,15 @@ const AIServiceHandlers = {
       return true;
     }
 
-    // Fallback to Enter key
     const enterEvent = new KeyboardEvent('keydown', {
       key: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true
     });
     element.dispatchEvent(enterEvent);
     return false;
-  },
+  }
 
-  async waitForResponse(streamingSelectors, maxAttempts = 10) {
-    await new Promise(r => setTimeout(r, 3000)); // Initial wait
+  async function waitForResponse(streamingSelectors, maxAttempts = 10) {
+    await new Promise(r => setTimeout(r, 3000));
 
     let attempts = 0;
     while (attempts < maxAttempts) {
@@ -590,10 +589,10 @@ const AIServiceHandlers = {
       await new Promise(r => setTimeout(r, 1000));
       attempts++;
     }
-  },
+  }
 
-  async chatgpt(prompt) {
-    // Find input element
+  // ChatGPT handler
+  if (who === "chatgpt") {
     const promptP = document.querySelector("#prompt-textarea > p");
     const promptDiv = document.querySelector("#prompt-textarea");
     const textarea = document.querySelector("textarea");
@@ -601,7 +600,7 @@ const AIServiceHandlers = {
     const inputElement = promptP || promptDiv || textarea;
     if (!inputElement) return "Input box not found";
 
-    await this.setPromptText(inputElement, prompt);
+    await setPromptText(inputElement, prompt);
     await new Promise(r => setTimeout(r, 500));
 
     const submitSelectors = [
@@ -611,7 +610,7 @@ const AIServiceHandlers = {
       '[data-testid="fruitjuice-send-button"]'
     ];
 
-    await this.triggerSubmit(inputElement, submitSelectors);
+    await triggerSubmit(inputElement, submitSelectors);
 
     const streamingSelectors = [
       '[data-testid="stop-button"]',
@@ -619,9 +618,8 @@ const AIServiceHandlers = {
       '[data-is-streaming="true"]'
     ];
 
-    await this.waitForResponse(streamingSelectors);
+    await waitForResponse(streamingSelectors);
 
-    // Try multiple selectors to find response
     const responseSelectors = [
       '[data-message-author-role="assistant"]',
       '.markdown, .prose, [class*="markdown"]',
@@ -638,10 +636,10 @@ const AIServiceHandlers = {
     }
 
     return "No response detected - check console for details";
-  },
+  }
 
-  async claude(prompt) {
-    // Find input element
+  // Claude handler
+  if (who === "claude") {
     const claudeInputP = document.querySelector('p[data-placeholder*="help you"]') ||
       document.querySelector('p[data-placeholder]') ||
       document.querySelector('.ProseMirror p');
@@ -661,7 +659,7 @@ const AIServiceHandlers = {
         proseMirrorParent.dispatchEvent(new Event("input", { bubbles: true }));
       }
     } else {
-      await this.setPromptText(inputElement, prompt);
+      await setPromptText(inputElement, prompt);
     }
 
     await new Promise(r => setTimeout(r, 500));
@@ -673,7 +671,7 @@ const AIServiceHandlers = {
       'button[aria-label*="Send"]:not([disabled])'
     ];
 
-    await this.triggerSubmit(inputElement, submitSelectors);
+    await triggerSubmit(inputElement, submitSelectors);
 
     const streamingSelectors = [
       '[data-is-streaming="true"]',
@@ -681,9 +679,8 @@ const AIServiceHandlers = {
       '[aria-label*="Stop"]'
     ];
 
-    await this.waitForResponse(streamingSelectors);
+    await waitForResponse(streamingSelectors);
 
-    // Try multiple selectors to find response
     const responseSelectors = [
       '[data-is-streaming="false"]',
       '.font-claude-message, .prose, [class*="message"]',
@@ -700,10 +697,10 @@ const AIServiceHandlers = {
     }
 
     return "No Claude response detected - check console for details";
-  },
+  }
 
-  async askme(prompt) {
-    // Find input element
+  // AskMe handler
+  if (who === "askme") {
     const askmeInputP = document.querySelector('p[data-placeholder*="help you"]') ||
       document.querySelector('p[data-placeholder]') ||
       document.querySelector('.ProseMirror p');
@@ -723,7 +720,7 @@ const AIServiceHandlers = {
         proseMirrorParent.dispatchEvent(new Event("input", { bubbles: true }));
       }
     } else {
-      await this.setPromptText(inputElement, prompt);
+      await setPromptText(inputElement, prompt);
     }
 
     await new Promise(r => setTimeout(r, 500));
@@ -739,7 +736,7 @@ const AIServiceHandlers = {
       'button[class*="primary"]'
     ];
 
-    await this.triggerSubmit(inputElement, submitSelectors);
+    await triggerSubmit(inputElement, submitSelectors);
 
     // Multiple retry attempts for AskMe
     for (let retry = 0; retry < 3; retry++) {
@@ -779,12 +776,6 @@ const AIServiceHandlers = {
 
     return "No AskMe response detected - check console for details";
   }
-};
 
-// Runs inside the target page
-async function sendPromptAndScrape(prompt, who) {
-  if (AIServiceHandlers[who]) {
-    return await AIServiceHandlers[who](prompt);
-  }
   return "Unsupported target";
 }
