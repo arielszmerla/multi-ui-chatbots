@@ -7,40 +7,63 @@ let browserSummarizer = null;
 let isModelLoaded = false;
 let isModelLoading = false;
 
-document.getElementById("send").addEventListener("click", async () => {
-  const prompt = document.getElementById("prompt").value;
+// Constants
+const MODEL_TARGETS = [
+  { name: "chatgpt", url: "https://chatgpt.com/*" },
+  { name: "claude", url: "https://claude.ai/*" },
+  { name: "askme", url: "https://askme.mobileye.com/*" }
+];
+
+// DOM element cache
+const DOM = {
+  elements: {},
+  get(id) {
+    if (!this.elements[id]) {
+      this.elements[id] = document.getElementById(id);
+    }
+    return this.elements[id];
+  }
+};
+
+// Utility functions
+const ResponseUI = {
+  updateStatus(modelName, status) {
+    DOM.get(modelName).innerHTML = `<b>${modelName}:</b><br>${status}`;
+  },
+
+  setEnabled(modelName, enabled) {
+    const div = DOM.get(modelName);
+    if (enabled) {
+      div.classList.remove('disabled');
+      this.updateStatus(modelName, 'Starting...');
+    } else {
+      div.classList.add('disabled');
+      this.updateStatus(modelName, 'Not selected');
+    }
+  }
+};
+
+DOM.get("send").addEventListener("click", async () => {
+  const prompt = DOM.get("prompt").value;
   currentPrompt = prompt;
 
   // Reset collected responses
   collectedResponses = {};
 
   // Hide summary section and button
-  document.getElementById("summary-section").classList.add("hidden");
-  document.getElementById("generate-summary").classList.add("hidden");
+  DOM.get("summary-section").classList.add("hidden");
+  DOM.get("generate-summary").classList.add("hidden");
 
   // Get selected models
   const enabledModels = Array.from(document.querySelectorAll('input[name="model"]:checked')).map(cb => cb.value);
 
-  const targets = [
-    { name: "chatgpt", url: "https://chatgpt.com/*" },
-    { name: "claude", url: "https://claude.ai/*" },
-    { name: "askme", url: "https://askme.mobileye.com/*" }
-  ];
-
   // Update visual state for all models
-  for (const target of targets) {
-    const responseDiv = document.getElementById(target.name);
-    if (enabledModels.includes(target.name)) {
-      responseDiv.classList.remove('disabled');
-      responseDiv.innerHTML = `<b>${target.name}:</b><br>Starting...`;
-    } else {
-      responseDiv.classList.add('disabled');
-      responseDiv.innerHTML = `<b>${target.name}:</b><br>Not selected`;
-    }
+  for (const target of MODEL_TARGETS) {
+    ResponseUI.setEnabled(target.name, enabledModels.includes(target.name));
   }
 
   // Process all selected models concurrently
-  const processingPromises = targets
+  const processingPromises = MODEL_TARGETS
     .filter(target => enabledModels.includes(target.name))
     .map(async (target) => {
       try {
@@ -48,24 +71,24 @@ document.getElementById("send").addEventListener("click", async () => {
 
         if (tabs.length === 0) {
           const noTabMessage = "No tab open";
-          document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>${noTabMessage}`;
+          ResponseUI.updateStatus(target.name, noTabMessage);
           collectedResponses[target.name] = noTabMessage;
           return;
         }
 
-        document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>Sending...`;
+        ResponseUI.updateStatus(target.name, "Sending...");
 
         const [{ result }] = await chrome.scripting.executeScript({
           target: { tabId: tabs[0].id },
           func: sendPromptAndScrape,
           args: [prompt, target.name]
         });
-        document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>${result}`;
+        ResponseUI.updateStatus(target.name, result);
         collectedResponses[target.name] = result;
       } catch (error) {
         console.error(`Error with ${target.name}:`, error);
         const errorMessage = `Error: ${error.message}`;
-        document.getElementById(target.name).innerHTML = `<b>${target.name}:</b><br>${errorMessage}`;
+        ResponseUI.updateStatus(target.name, errorMessage);
         collectedResponses[target.name] = errorMessage;
       }
     });
@@ -78,7 +101,7 @@ document.getElementById("send").addEventListener("click", async () => {
 });
 
 // Summary functionality
-document.getElementById("generate-summary").addEventListener("click", async () => {
+DOM.get("generate-summary").addEventListener("click", async () => {
   await generateSummary();
 });
 
