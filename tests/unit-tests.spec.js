@@ -237,4 +237,23 @@ test.describe('Unit Tests - Utility Functions', () => {
         expect(promptText).toContain('Key Similarities');
         expect(promptText).toContain('Quality Assessment');
     });
+
+    test('ResponseUtils utility exists and has expected methods', async ({ context }) => {
+        const page = await context.newPage();
+        await loadExtensionPopup(page, extensionId);
+
+        const utilityCheck = await page.evaluate(() => {
+            return {
+                exists: typeof ResponseUtils !== 'undefined',
+                hasIsValidResponse: typeof ResponseUtils?.isValidResponse === 'function',
+                hasGetValidResponses: typeof ResponseUtils?.getValidResponses === 'function',
+                hasFormatForSummary: typeof ResponseUtils?.formatForSummary === 'function'
+            };
+        });
+
+        expect(utilityCheck.exists).toBe(true);
+        expect(utilityCheck.hasIsValidResponse).toBe(true);
+        expect(utilityCheck.hasGetValidResponses).toBe(true);
+        expect(utilityCheck.hasFormatForSummary).toBe(true);
+    });
 }); 

@@ -246,8 +246,8 @@ const APIKeyManager = {
 // Utility functions for response filtering and formatting
 const ResponseUtils = {
   isValidResponse(response) {
-    return response && response.length > 10 && 
-           !response.includes("Error:") && !response.includes("No tab open");
+    return response && response.length > 10 &&
+      !response.includes("Error:") && !response.includes("No tab open");
   },
 
   getValidResponses() {
@@ -275,7 +275,7 @@ async function generateSummary() {
 
   try {
     let summary;
-    
+
     if (method === "browser") {
       summary = await generateBrowserBasedSummary();
     } else {
@@ -413,7 +413,7 @@ function updateModelStatus(status) {
 function updateSummaryButtonState() {
   const method = DOM.get("summary-method").value;
   const hasValidResponses = ResponseUtils.getValidResponses().length > 0;
-  
+
   const canSummarize = hasValidResponses && (
     method === "browser" ? isModelLoaded : DOM.get("openai-api-key").value.trim().length > 0
   );
