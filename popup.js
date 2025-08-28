@@ -243,48 +243,52 @@ const APIKeyManager = {
   }
 };
 
-// Summary generation functionality  
+// Utility functions for response filtering and formatting
+const ResponseUtils = {
+  isValidResponse(response) {
+    return response && response.length > 10 && 
+           !response.includes("Error:") && !response.includes("No tab open");
+  },
+
+  getValidResponses() {
+    return Object.entries(collectedResponses)
+      .filter(([_, response]) => this.isValidResponse(response));
+  },
+
+  formatForSummary(entries) {
+    return entries.map(([model, response]) => `**${model.toUpperCase()}:**\n${response}`).join('\n\n');
+  }
+};
+
+// Simplified summary generation
 async function generateSummary() {
-  const method = document.getElementById("summary-method").value;
+  const method = DOM.get("summary-method").value;
+  const summarySection = DOM.get("summary-section");
+  const summaryContent = DOM.get("summary-content");
+  const summaryButton = DOM.get("generate-summary");
 
-  // Show summary section and loading state
-  const summarySection = document.getElementById("summary-section");
-  const summaryContent = document.getElementById("summary-content");
-
+  // Setup loading state
   summarySection.classList.remove("hidden");
   summaryContent.innerHTML = '<div class="text-center text-muted">Generating summary...</div>';
-
-  // Disable summary button while processing
-  const summaryButton = document.getElementById("generate-summary");
   summaryButton.disabled = true;
   summaryButton.textContent = "Generating...";
 
   try {
     let summary;
-
+    
     if (method === "browser") {
       summary = await generateBrowserBasedSummary();
-    } else if (method === "openai") {
-      const apiKey = document.getElementById("openai-api-key").value.trim();
-      if (!apiKey) {
-        throw new Error("Please configure your OpenAI API key first.");
-      }
-
-      // Prepare the prompt for summarization
-      const summaryPrompt = createSummaryPrompt();
-
-      // Call OpenAI API
-      summary = await callOpenAI(apiKey, summaryPrompt);
+    } else {
+      const apiKey = DOM.get("openai-api-key").value.trim();
+      if (!apiKey) throw new Error("Please configure your OpenAI API key first.");
+      summary = await callOpenAI(apiKey, createSummaryPrompt());
     }
 
-    // Display the summary
     summaryContent.innerHTML = summary;
-
   } catch (error) {
     console.error("Error generating summary:", error);
     summaryContent.innerHTML = `<div style="color: red;">Error generating summary: ${error.message}</div>`;
   } finally {
-    // Re-enable summary button
     summaryButton.disabled = false;
     summaryButton.textContent = "Regenerate Summary";
   }
@@ -295,25 +299,14 @@ async function generateBrowserBasedSummary() {
     throw new Error("Real LLM not loaded. Please wait for DistilGPT-2 model download to complete.");
   }
 
-  // Collect all valid responses
-  const responses = [];
-  for (const [model, response] of Object.entries(collectedResponses)) {
-    if (response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")) {
-      responses.push(`**${model.toUpperCase()}:** ${response}`);
-    }
-  }
-
-  if (responses.length === 0) {
+  const validResponses = ResponseUtils.getValidResponses();
+  if (validResponses.length === 0) {
     throw new Error("No valid responses to summarize");
   }
 
-  // Combine responses
-  const combinedText = `Original Prompt: "${currentPrompt}"\n\nResponses:\n${responses.join('\n\n')}`;
-
-  // Generate summary using real neural LLM
+  const combinedText = `Original Prompt: "${currentPrompt}"\n\nResponses:\n${ResponseUtils.formatForSummary(validResponses)}`;
   const summary = await generateBrowserSummary(combinedText);
 
-  // Format the summary nicely
   return `<div style="margin-bottom: 10px;"><strong>Real Neural LLM Analysis:</strong></div>
 <div style="padding: 10px; background: #f8f9fa; border-radius: 4px; line-height: 1.5;">
 ${summary}
@@ -323,28 +316,29 @@ Generated using DistilGPT-2 neural language model (67MB, runs locally, completel
 </div>`;
 }
 
+// Simplified prompt creation
 function createSummaryPrompt() {
-  let prompt = `Please analyze and summarize the following AI model responses to this prompt:\n\n`;
-  prompt += `**Original Prompt:** "${currentPrompt}"\n\n`;
-  prompt += `**Responses:**\n\n`;
+  const validResponses = ResponseUtils.formatForSummary(ResponseUtils.getValidResponses());
 
-  for (const [model, response] of Object.entries(collectedResponses)) {
-    if (response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")) {
-      prompt += `**${model.toUpperCase()}:**\n${response}\n\n`;
-    }
-  }
+  return `Please analyze and summarize the following AI model responses to this prompt:
 
-  prompt += `Please provide:\n`;
-  prompt += `1. **Key Similarities:** What did all models agree on?\n`;
-  prompt += `2. **Key Differences:** Where did the models diverge?\n`;
-  prompt += `3. **Unique Insights:** What unique perspectives did each model offer?\n`;
-  prompt += `4. **Quality Assessment:** Which response was most comprehensive/accurate?\n`;
-  prompt += `5. **Consolidated Answer:** Combine the best elements into one cohesive response.\n\n`;
-  prompt += `Format your response clearly with the above sections.`;
+**Original Prompt:** "${currentPrompt}"
 
-  return prompt;
+**Responses:**
+
+${validResponses}
+
+Please provide:
+1. **Key Similarities:** What did all models agree on?
+2. **Key Differences:** Where did the models diverge?  
+3. **Unique Insights:** What unique perspectives did each model offer?
+4. **Quality Assessment:** Which response was most comprehensive/accurate?
+5. **Consolidated Answer:** Combine the best elements into one cohesive response.
+
+Format your response clearly with the above sections.`;
 }
 
+// Simplified OpenAI API call
 async function callOpenAI(apiKey, prompt) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -355,14 +349,8 @@ async function callOpenAI(apiKey, prompt) {
     body: JSON.stringify({
       model: "gpt-3.5-turbo",
       messages: [
-        {
-          role: "system",
-          content: "You are an expert AI analyst. Provide clear, structured comparisons and summaries of AI model responses."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
+        { role: "system", content: "You are an expert AI analyst. Provide clear, structured comparisons and summaries of AI model responses." },
+        { role: "user", content: prompt }
       ],
       max_tokens: 1500,
       temperature: 0.7
@@ -374,8 +362,7 @@ async function callOpenAI(apiKey, prompt) {
     throw new Error(error.error?.message || `HTTP ${response.status}: ${response.statusText}`);
   }
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+  return (await response.json()).choices[0].message.content;
 }
 
 // Real Neural LLM Functions
@@ -416,16 +403,7 @@ async function generateBrowserSummary(text) {
   if (!isModelLoaded || !browserSummarizer) {
     throw new Error("Real Neural LLM not loaded");
   }
-
-  try {
-    // Use our simple summarizer
-    const summary = browserSummarizer.summarize(text);
-    return summary;
-
-  } catch (error) {
-    console.error("Error generating browser summary:", error);
-    throw error;
-  }
+  return browserSummarizer.summarize(text);
 }
 
 function updateModelStatus(status) {
@@ -434,633 +412,376 @@ function updateModelStatus(status) {
 
 function updateSummaryButtonState() {
   const method = DOM.get("summary-method").value;
-  const hasResponses = Object.keys(collectedResponses).length > 0;
-  const hasValidResponses = Object.values(collectedResponses).some(response =>
-    response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")
+  const hasValidResponses = ResponseUtils.getValidResponses().length > 0;
+  
+  const canSummarize = hasValidResponses && (
+    method === "browser" ? isModelLoaded : DOM.get("openai-api-key").value.trim().length > 0
   );
 
-  let canSummarize = false;
-
-  if (method === "browser") {
-    canSummarize = hasResponses && hasValidResponses && isModelLoaded;
-  } else if (method === "openai") {
-    const hasApiKey = DOM.get("openai-api-key").value.trim().length > 0;
-    canSummarize = hasResponses && hasValidResponses && hasApiKey;
-  }
-
-  if (canSummarize) {
-    DOM.get("generate-summary").classList.remove("hidden");
-  } else {
-    DOM.get("generate-summary").classList.add("hidden");
-  }
+  DOM.get("generate-summary").classList.toggle("hidden", !canSummarize);
 }
 
 // Enable/disable send button based on prompt input
 function updateSendButton() {
-  const prompt = DOM.get("prompt").value.trim();
-  DOM.get("send").disabled = prompt.length === 0;
+  DOM.get("send").disabled = !DOM.get("prompt").value.trim();
 }
 
-// Add event listeners to update visual state when checkboxes change
+// Consolidated initialization
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize API key management
-  APIKeyManager.init();
-  APIKeyManager.load();
+  // Initialize all managers
+  const managers = {
+    api: APIKeyManager,
+    summary: {
+      init() {
+        const summaryMethod = DOM.get("summary-method");
+        const openaiSettings = DOM.get("openai-settings");
 
-  // Add input listener to prompt textarea
-  DOM.get("prompt").addEventListener("input", updateSendButton);
+        // Initialize visibility
+        openaiSettings.classList.toggle("hidden", summaryMethod.value === "browser");
 
-  // Initialize send button state
-  updateSendButton();
-
-  // Summary method handling utility
-  const SummaryMethodManager = {
-    toggleOpenAISettings(method) {
-      const openaiSettings = DOM.get("openai-settings");
-      if (method === "browser") {
-        openaiSettings.classList.add("hidden");
-        if (!isModelLoaded && !isModelLoading) {
-          updateModelStatus("Real Neural LLM: Model not downloaded yet");
-        }
-      } else {
-        openaiSettings.classList.remove("hidden");
+        summaryMethod.addEventListener("change", (e) => {
+          openaiSettings.classList.toggle("hidden", e.target.value === "browser");
+          updateSummaryButtonState();
+        });
       }
     },
+    models: {
+      init() {
+        document.querySelectorAll('input[name="model"]').forEach(checkbox => {
+          const updateUI = () => {
+            const status = checkbox.checked ? 'Ready' : 'Not selected';
+            ResponseUI.setEnabled(checkbox.value, checkbox.checked);
+            if (checkbox.checked) ResponseUI.updateStatus(checkbox.value, status);
+          };
 
-    init() {
-      // Initialize OpenAI settings visibility
-      const initialMethod = DOM.get("summary-method").value;
-      this.toggleOpenAISettings(initialMethod);
+          checkbox.addEventListener('change', updateUI);
+          updateUI(); // Initialize
+        });
+      }
+    },
+    tabs: {
+      init() {
+        document.querySelectorAll('.btn-small[data-url]').forEach(button => {
+          button.addEventListener('click', async () => {
+            const url = button.getAttribute('data-url');
 
-      // Summary method selection event listener
-      DOM.get("summary-method").addEventListener("change", (e) => {
-        this.toggleOpenAISettings(e.target.value);
-        updateSummaryButtonState();
-      });
+            try {
+              const existingTabs = await chrome.tabs.query({ url: url + '/*' });
+
+              if (existingTabs.length > 0) {
+                await chrome.tabs.update(existingTabs[0].id, { active: true });
+                await chrome.windows.update(existingTabs[0].windowId, { focused: true });
+              } else {
+                await chrome.tabs.create({ url: url, active: true });
+              }
+
+              this.showFeedback(button, 'Opened!', '#90EE90');
+            } catch (error) {
+              console.error('Error opening tab:', error);
+              this.showFeedback(button, 'Error', '#FFB6C1');
+            }
+          });
+        });
+      },
+
+      showFeedback(button, text, color) {
+        const original = { text: button.textContent, bg: button.style.background };
+        button.textContent = text;
+        button.style.background = color;
+        setTimeout(() => {
+          button.textContent = original.text;
+          button.style.background = original.bg;
+        }, 1000);
+      }
     }
   };
 
-  SummaryMethodManager.init();
+  // Initialize everything
+  Object.values(managers).forEach(manager => manager.init());
 
-  // Listen for Real Neural LLM ready event
+  // Initialize other components
+  DOM.get("prompt").addEventListener("input", updateSendButton);
+  updateSendButton();
+
+  // Browser LLM initialization
+  const initBrowserLLM = async () => {
+    if (isModelLoading || isModelLoaded || !window.realBrowserLLM?.available) return;
+
+    try {
+      isModelLoading = true;
+      updateModelStatus("Loading response compiler...");
+
+      await window.realBrowserLLM.initialize((progress) => {
+        updateModelStatus(`Simple Compiler: ${progress}`);
+      });
+
+      browserSummarizer = window.simpleSummarizer;
+      isModelLoaded = true;
+      isModelLoading = false;
+      updateModelStatus("Real Neural LLM: DistilGPT-2 ready!");
+      updateSummaryButtonState();
+    } catch (error) {
+      console.error("Error initializing Real Neural LLM:", error);
+      isModelLoading = false;
+      updateModelStatus(`Real Neural LLM: Failed to load - ${error.message}`);
+    }
+  };
+
+  // Event listeners for LLM
   window.addEventListener('simpleSummarizerReady', () => {
     updateModelStatus("Simple Response Compiler ready!");
-
-    // Auto-initialize Real Neural LLM when ready
-    console.log("SimpleSummarizerReady event fired, isModelLoaded:", isModelLoaded, "isModelLoading:", isModelLoading);
     if (!isModelLoaded && !isModelLoading) {
-      console.log("Starting initBrowserLLM...");
-      setTimeout(() => initBrowserLLM(), 500); // Small delay to ensure everything is ready
+      setTimeout(initBrowserLLM, 500);
     }
   });
 
-  // No manual download needed for simple compiler
-
-  // Initialize Real Neural LLM immediately if available
-  if (window.simpleSummarizer && window.simpleSummarizer.available && !isModelLoaded && !isModelLoading) {
+  if (window.simpleSummarizer?.available && !isModelLoaded && !isModelLoading) {
     initBrowserLLM();
   }
-
-  // Model checkbox manager
-  const ModelCheckboxManager = {
-    updateModelUI(checkbox) {
-      const status = checkbox.checked ? 'Ready' : 'Not selected';
-      ResponseUI.setEnabled(checkbox.value, checkbox.checked);
-      if (checkbox.checked) {
-        ResponseUI.updateStatus(checkbox.value, status);
-      }
-    },
-
-    init() {
-      const checkboxes = document.querySelectorAll('input[name="model"]');
-
-      // Add event listeners
-      checkboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', () => this.updateModelUI(checkbox));
-      });
-
-      // Initialize visual state
-      checkboxes.forEach(checkbox => this.updateModelUI(checkbox));
-    }
-  };
-
-  ModelCheckboxManager.init();
-
-  // Open tab manager
-  const OpenTabManager = {
-    async handleTabOpen(button) {
-      const url = button.getAttribute('data-url');
-      const modelName = button.parentElement.querySelector('label').textContent.trim();
-
-      try {
-        // Check if tab already exists
-        const existingTabs = await chrome.tabs.query({ url: url + '/*' });
-
-        if (existingTabs.length > 0) {
-          // Focus existing tab
-          await chrome.tabs.update(existingTabs[0].id, { active: true });
-          await chrome.windows.update(existingTabs[0].windowId, { focused: true });
-        } else {
-          // Create new tab
-          await chrome.tabs.create({ url: url, active: true });
-        }
-
-        this.showFeedback(button, 'Opened!', '#90EE90');
-      } catch (error) {
-        console.error(`Error opening ${modelName} tab:`, error);
-        this.showFeedback(button, 'Error', '#FFB6C1');
-      }
-    },
-
-    showFeedback(button, text, color) {
-      const originalText = button.textContent;
-      const originalBackground = button.style.background;
-
-      button.textContent = text;
-      button.style.background = color;
-
-      setTimeout(() => {
-        button.textContent = originalText;
-        button.style.background = originalBackground;
-      }, 1000);
-    },
-
-    init() {
-      const openTabButtons = document.querySelectorAll('.btn-small[data-url]');
-      openTabButtons.forEach(button => {
-        button.addEventListener('click', () => this.handleTabOpen(button));
-      });
-    }
-  };
-
-  OpenTabManager.init();
 });
 
-// Runs inside the target page
-async function sendPromptAndScrape(prompt, who) {
-
-  // 🔹 ChatGPT
-  if (who === "chatgpt") {
-    // Try the contenteditable approach first
-    const promptDiv = document.querySelector("#prompt-textarea");
-    const promptP = document.querySelector("#prompt-textarea > p");
-
-    if (promptP) {
-      // Clear existing content and set new content
-      promptP.textContent = prompt;
-
-      // Trigger input events for contenteditable
-      promptDiv.dispatchEvent(new Event("input", { bubbles: true }));
-      promptDiv.dispatchEvent(new Event("change", { bubbles: true }));
-
-      // Set focus to make sure it's active
-      promptP.focus();
-    } else if (promptDiv) {
-      // Fallback: set content directly on the main div
-      promptDiv.textContent = prompt;
-      promptDiv.dispatchEvent(new Event("input", { bubbles: true }));
-      promptDiv.focus();
+// AI Service Handlers (extracted from sendPromptAndScrape)
+const AIServiceHandlers = {
+  // Common utilities for all services
+  async setPromptText(element, prompt) {
+    if (element.tagName === 'TEXTAREA') {
+      element.value = prompt;
+      element.dispatchEvent(new Event("input", { bubbles: true }));
     } else {
-      // Last fallback: try textarea
-      const textarea = document.querySelector("textarea");
-      if (!textarea) return "Input box not found";
-      textarea.value = prompt;
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      // For contenteditable elements
+      element.textContent = prompt;
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
     }
+    element.focus();
+  },
 
+  async triggerSubmit(element, submitSelectors) {
     // Try to find submit button
-    const submitButton = document.querySelector('button[data-testid="send-button"]') ||
-      document.querySelector('svg[data-testid="send-button"]')?.closest('button') ||
-      document.querySelector('button[aria-label*="Send"]') ||
-      document.querySelector('[data-testid="fruitjuice-send-button"]');
-
-    // Wait a moment for the UI to update
-    await new Promise(r => setTimeout(r, 500));
+    let submitButton = null;
+    for (const selector of submitSelectors) {
+      submitButton = document.querySelector(selector);
+      if (submitButton) break;
+    }
 
     if (submitButton && !submitButton.disabled) {
       submitButton.click();
-    } else {
-      // Simulate Enter key press more accurately
-      const activeElement = promptP || promptDiv || document.querySelector("textarea");
-      if (activeElement) {
-        // First try keydown event
-        const enterEvent = new KeyboardEvent('keydown', {
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true,
-          composed: true
-        });
-        activeElement.dispatchEvent(enterEvent);
-
-        // Also try keypress
-        const keyPressEvent = new KeyboardEvent('keypress', {
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true
-        });
-        activeElement.dispatchEvent(keyPressEvent);
-
-        // And keyup to complete the sequence
-        const keyUpEvent = new KeyboardEvent('keyup', {
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true
-        });
-        activeElement.dispatchEvent(keyUpEvent);
-      }
+      return true;
     }
 
-    // Alternative: try to find and click send button after content is set
-    await new Promise(r => setTimeout(r, 100));
-    const sendButtonRetry = document.querySelector('button[data-testid="send-button"]:not([disabled])');
-    if (sendButtonRetry && !submitButton?.click) {
-      sendButtonRetry.click();
-    }
+    // Fallback to Enter key
+    const enterEvent = new KeyboardEvent('keydown', {
+      key: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true
+    });
+    element.dispatchEvent(enterEvent);
+    return false;
+  },
 
-    // Wait for response with better detection
+  async waitForResponse(streamingSelectors, maxAttempts = 10) {
     await new Promise(r => setTimeout(r, 3000)); // Initial wait
 
-    // Wait for streaming to complete
     let attempts = 0;
-    while (attempts < 10) {
-      const streamingIndicator = document.querySelector('[data-testid="stop-button"]') ||
-        document.querySelector('.result-streaming') ||
-        document.querySelector('[data-is-streaming="true"]');
-      if (!streamingIndicator) break;
+    while (attempts < maxAttempts) {
+      const isStreaming = streamingSelectors.some(selector => document.querySelector(selector));
+      if (!isStreaming) break;
       await new Promise(r => setTimeout(r, 1000));
       attempts++;
     }
+  },
 
-    // Try multiple selectors to find ChatGPT response
-    let responseText = "";
+  async chatgpt(prompt) {
+    // Find input element
+    const promptP = document.querySelector("#prompt-textarea > p");
+    const promptDiv = document.querySelector("#prompt-textarea");
+    const textarea = document.querySelector("textarea");
 
-    // Try data-message-author-role first
-    const assistantMessages = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+    const inputElement = promptP || promptDiv || textarea;
+    if (!inputElement) return "Input box not found";
 
-    if (assistantMessages.length > 0) {
-      const lastMessage = assistantMessages[assistantMessages.length - 1];
-      responseText = lastMessage?.innerText?.trim();
-    }
+    await this.setPromptText(inputElement, prompt);
+    await new Promise(r => setTimeout(r, 500));
 
-    // Fallback 1: Look for markdown content
-    if (!responseText) {
-      const markdownElements = Array.from(document.querySelectorAll('.markdown, .prose, [class*="markdown"]'));
+    const submitSelectors = [
+      'button[data-testid="send-button"]',
+      'svg[data-testid="send-button"]',
+      'button[aria-label*="Send"]',
+      '[data-testid="fruitjuice-send-button"]'
+    ];
 
-      if (markdownElements.length > 0) {
-        const lastMarkdown = markdownElements[markdownElements.length - 1];
-        responseText = lastMarkdown?.innerText?.trim();
+    await this.triggerSubmit(inputElement, submitSelectors);
+
+    const streamingSelectors = [
+      '[data-testid="stop-button"]',
+      '.result-streaming',
+      '[data-is-streaming="true"]'
+    ];
+
+    await this.waitForResponse(streamingSelectors);
+
+    // Try multiple selectors to find response
+    const responseSelectors = [
+      '[data-message-author-role="assistant"]',
+      '.markdown, .prose, [class*="markdown"]',
+      '[data-testid*="conversation"] div, .conversation div, [role="presentation"] div'
+    ];
+
+    for (const selector of responseSelectors) {
+      const elements = Array.from(document.querySelectorAll(selector));
+      if (elements.length > 0) {
+        const lastElement = elements[elements.length - 1];
+        const text = lastElement?.innerText?.trim();
+        if (text && text.length > 10) return text;
       }
     }
 
-    // Fallback 2: Look for conversation messages
-    if (!responseText) {
-      const conversationMessages = Array.from(document.querySelectorAll('[data-testid*="conversation"] div, .conversation div, [role="presentation"] div'));
+    return "No response detected - check console for details";
+  },
 
-      // Get the last few and find one that looks like a response
-      const recentMessages = conversationMessages.slice(-10);
-      for (let i = recentMessages.length - 1; i >= 0; i--) {
-        const text = recentMessages[i]?.innerText?.trim();
-        if (text && text.length > 10 && !text.includes("Copy code")) {
-          responseText = text;
-          break;
-        }
-      }
-    }
-
-    // Fallback 3: Look for any text content that might be the response
-    if (!responseText) {
-      const allDivs = Array.from(document.querySelectorAll('div'));
-      console.log("Total divs found:", allDivs.length);
-
-      // Look for divs with substantial text content
-      for (let i = allDivs.length - 1; i >= Math.max(0, allDivs.length - 50); i--) {
-        const div = allDivs[i];
-        const text = div?.innerText?.trim();
-
-        // Skip if it's likely not a response
-        if (!text ||
-          text.length < 20 ||
-          text.includes("Send a message") ||
-          text.includes("ChatGPT") ||
-          text.includes("Copy code") ||
-          div.querySelector('button, input, textarea')) {
-          continue;
-        }
-
-        responseText = text;
-        console.log("Got response from div search:", responseText?.substring(0, 100));
-        break;
-      }
-    }
-
-    return responseText || "No response detected - check console for details";
-  }
-
-  // 🔹 Claude
-  if (who === "claude") {
-    // Try the contenteditable approach first (ProseMirror)
+  async claude(prompt) {
+    // Find input element
     const claudeInputP = document.querySelector('p[data-placeholder*="help you"]') ||
       document.querySelector('p[data-placeholder]') ||
       document.querySelector('.ProseMirror p');
+    const textarea = document.querySelector("textarea");
 
-
+    const inputElement = claudeInputP || textarea;
+    if (!inputElement) return "Input box not found";
 
     if (claudeInputP) {
-      // Clear existing content and set new content
       claudeInputP.innerHTML = prompt;
-
-      // Remove empty classes
       claudeInputP.classList.remove('is-empty', 'is-editor-empty');
-
-      // Trigger input events for ProseMirror
-      const inputEvent = new Event("input", { bubbles: true });
-      claudeInputP.dispatchEvent(inputEvent);
-
-      // Focus the element
+      claudeInputP.dispatchEvent(new Event("input", { bubbles: true }));
       claudeInputP.focus();
 
-      // Also trigger on parent if it exists
       const proseMirrorParent = claudeInputP.closest('.ProseMirror');
       if (proseMirrorParent) {
         proseMirrorParent.dispatchEvent(new Event("input", { bubbles: true }));
       }
     } else {
-      // Fallback to textarea
-      const textarea = document.querySelector("textarea");
-      if (!textarea) return "Input box not found";
-      textarea.value = prompt;
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      await this.setPromptText(inputElement, prompt);
     }
 
-    // Wait a moment for the UI to update
     await new Promise(r => setTimeout(r, 500));
 
-    // Try to find submit button
-    const submitButton = document.querySelector('button[aria-label="Send Message"]') ||
-      document.querySelector('button[data-testid="send-button"]') ||
-      document.querySelector('svg[data-icon="send"]')?.closest('button') ||
-      document.querySelector('button:not([disabled])') &&
-      Array.from(document.querySelectorAll('button:not([disabled])')).find(btn =>
-        btn.textContent.includes('Send') || btn.getAttribute('aria-label')?.includes('Send'));
+    const submitSelectors = [
+      'button[aria-label="Send Message"]',
+      'button[data-testid="send-button"]',
+      'svg[data-icon="send"]',
+      'button[aria-label*="Send"]:not([disabled])'
+    ];
 
-    if (submitButton && !submitButton.disabled) {
-      submitButton.click();
-    } else {
-      // Simulate Enter key press
-      const activeElement = claudeInputP || document.querySelector("textarea");
-      if (activeElement) {
-        const enterEvent = new KeyboardEvent('keydown', {
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true,
-          composed: true
-        });
-        activeElement.dispatchEvent(enterEvent);
+    await this.triggerSubmit(inputElement, submitSelectors);
+
+    const streamingSelectors = [
+      '[data-is-streaming="true"]',
+      '.loading',
+      '[aria-label*="Stop"]'
+    ];
+
+    await this.waitForResponse(streamingSelectors);
+
+    // Try multiple selectors to find response
+    const responseSelectors = [
+      '[data-is-streaming="false"]',
+      '.font-claude-message, .prose, [class*="message"]',
+      'div[data-testid*="conversation"] div, .conversation div'
+    ];
+
+    for (const selector of responseSelectors) {
+      const elements = Array.from(document.querySelectorAll(selector));
+      if (elements.length > 0) {
+        const lastElement = elements[elements.length - 1];
+        const text = lastElement?.innerText?.trim();
+        if (text && text.length > 10 && !text.includes("Send a message")) return text;
       }
     }
 
-    // Alternative: retry send button after content is set
-    await new Promise(r => setTimeout(r, 100));
-    const sendButtonRetry = document.querySelector('button[aria-label*="Send"]:not([disabled])');
-    if (sendButtonRetry) {
-      console.log("Retrying Claude send button click");
-      sendButtonRetry.click();
-    }
+    return "No Claude response detected - check console for details";
+  },
 
-    // Wait for response
-    await new Promise(r => setTimeout(r, 3000));
-
-    // Wait for streaming to complete
-    let attempts = 0;
-    while (attempts < 10) {
-      const streamingIndicator = document.querySelector('[data-is-streaming="true"]') ||
-        document.querySelector('.loading') ||
-        document.querySelector('[aria-label*="Stop"]');
-      if (!streamingIndicator) break;
-      await new Promise(r => setTimeout(r, 1000));
-      attempts++;
-    }
-
-    console.log("Claude finished waiting for streaming, now looking for messages...");
-
-    // Try multiple selectors to find Claude response
-    let responseText = "";
-
-    // Try Claude-specific selectors first
-    const claudeMessages = Array.from(document.querySelectorAll('[data-is-streaming="false"]'));
-    console.log("Claude streaming=false messages found:", claudeMessages.length);
-
-    if (claudeMessages.length > 0) {
-      const lastMessage = claudeMessages[claudeMessages.length - 1];
-      responseText = lastMessage?.innerText?.trim();
-      console.log("Got Claude response from streaming=false:", responseText?.substring(0, 100));
-    }
-
-    // Fallback 1: Look for message content
-    if (!responseText) {
-      const messageElements = Array.from(document.querySelectorAll('.font-claude-message, .prose, [class*="message"]'));
-      console.log("Claude message elements found:", messageElements.length);
-
-      if (messageElements.length > 0) {
-        const lastMessage = messageElements[messageElements.length - 1];
-        responseText = lastMessage?.innerText?.trim();
-        console.log("Got Claude response from message elements:", responseText?.substring(0, 100));
-      }
-    }
-
-    // Fallback 2: Look for conversation content
-    if (!responseText) {
-      const conversationDivs = Array.from(document.querySelectorAll('div[data-testid*="conversation"] div, .conversation div'));
-      console.log("Claude conversation divs found:", conversationDivs.length);
-
-      const recentDivs = conversationDivs.slice(-10);
-      for (let i = recentDivs.length - 1; i >= 0; i--) {
-        const text = recentDivs[i]?.innerText?.trim();
-        if (text && text.length > 10 && !text.includes("Send a message")) {
-          responseText = text;
-          console.log("Got Claude response from conversation:", responseText?.substring(0, 100));
-          break;
-        }
-      }
-    }
-
-    return responseText || "No Claude response detected - check console for details";
-  }
-
-  // 🔹 AskMe
-  if (who === "askme") {
-    // Try the contenteditable approach first (ProseMirror)
+  async askme(prompt) {
+    // Find input element
     const askmeInputP = document.querySelector('p[data-placeholder*="help you"]') ||
       document.querySelector('p[data-placeholder]') ||
       document.querySelector('.ProseMirror p');
+    const textarea = document.querySelector("textarea");
 
-    console.log("AskMe input p found:", !!askmeInputP);
+    const inputElement = askmeInputP || textarea;
+    if (!inputElement) return "Input box not found";
 
     if (askmeInputP) {
-      // Clear existing content and set new content
       askmeInputP.innerHTML = prompt;
-
-      // Remove empty classes
       askmeInputP.classList.remove('is-empty', 'is-editor-empty');
-
-      // Trigger input events for ProseMirror
-      const inputEvent = new Event("input", { bubbles: true });
-      askmeInputP.dispatchEvent(inputEvent);
-
-      // Focus the element
+      askmeInputP.dispatchEvent(new Event("input", { bubbles: true }));
       askmeInputP.focus();
 
-      // Also trigger on parent if it exists
       const proseMirrorParent = askmeInputP.closest('.ProseMirror');
       if (proseMirrorParent) {
         proseMirrorParent.dispatchEvent(new Event("input", { bubbles: true }));
       }
     } else {
-      // Fallback to textarea
-      const textarea = document.querySelector("textarea");
-      console.log("AskMe textarea fallback found:", !!textarea);
-      if (!textarea) return "Input box not found";
-      textarea.value = prompt;
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      await this.setPromptText(inputElement, prompt);
     }
 
-    // Wait a moment for the UI to update
     await new Promise(r => setTimeout(r, 500));
 
-    // Try to find submit button with comprehensive AskMe-specific selectors
-    const submitButton = document.querySelector('button[aria-label="Send Message"]') ||
-      document.querySelector('button[data-testid="send-button"]') ||
-      document.querySelector('button[title*="Send"]') ||
-      document.querySelector('button[type="submit"]') ||
-      document.querySelector('svg[data-icon="send"]')?.closest('button') ||
-      document.querySelector('[data-testid="send-icon"]')?.closest('button') ||
-      document.querySelector('[class*="send"]')?.closest('button') ||
-      document.querySelector('[class*="submit"]')?.closest('button') ||
-      document.querySelector('button[class*="primary"]') ||
-      Array.from(document.querySelectorAll('button:not([disabled])')).find(btn => {
-        const text = btn.textContent?.toLowerCase()?.trim() || '';
-        const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
-        const className = btn.className?.toLowerCase() || '';
-        return text.includes('send') || text.includes('submit') || text === 'go' ||
-          ariaLabel.includes('send') || ariaLabel.includes('submit') ||
-          className.includes('send') || className.includes('submit');
-      });
-    console.log("AskMe submit button found:", !!submitButton);
+    const submitSelectors = [
+      'button[aria-label="Send Message"]',
+      'button[data-testid="send-button"]',
+      'button[title*="Send"]',
+      'button[type="submit"]',
+      'svg[data-icon="send"]',
+      '[data-testid="send-icon"]',
+      '[class*="send"]',
+      'button[class*="primary"]'
+    ];
 
-    if (submitButton && !submitButton.disabled) {
-      console.log("Clicking AskMe submit button");
-      submitButton.click();
-    } else {
-      // Simulate comprehensive Enter key sequence
-      const activeElement = askmeInputP || document.querySelector("textarea") || document.querySelector('.ProseMirror');
-      console.log("AskMe trying Enter key on element:", !!activeElement);
-      if (activeElement) {
-        // Complete key event sequence
-        const keyDownEvent = new KeyboardEvent('keydown', {
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true,
-          composed: true
-        });
-
-        const keyPressEvent = new KeyboardEvent('keypress', {
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true
-        });
-
-        const keyUpEvent = new KeyboardEvent('keyup', {
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true
-        });
-
-        activeElement.dispatchEvent(keyDownEvent);
-        activeElement.dispatchEvent(keyPressEvent);
-        activeElement.dispatchEvent(keyUpEvent);
-        console.log("AskMe Enter key events dispatched");
-      }
-    }
+    await this.triggerSubmit(inputElement, submitSelectors);
 
     // Multiple retry attempts for AskMe
     for (let retry = 0; retry < 3; retry++) {
       await new Promise(r => setTimeout(r, 200));
-
-      const sendButtonRetry = document.querySelector('button[aria-label*="Send"]:not([disabled])') ||
-        document.querySelector('button[title*="Send"]:not([disabled])') ||
-        Array.from(document.querySelectorAll('button:not([disabled])')).find(btn =>
-          btn.textContent?.toLowerCase().includes('send')
-        );
-
-      if (sendButtonRetry) {
-        console.log(`AskMe retry ${retry + 1}: Clicking send button`);
-        sendButtonRetry.click();
+      const retryButton = document.querySelector('button[aria-label*="Send"]:not([disabled])') ||
+        document.querySelector('button[title*="Send"]:not([disabled])');
+      if (retryButton) {
+        retryButton.click();
         break;
       }
     }
 
     await new Promise(r => setTimeout(r, 8000));
 
-    // Try multiple selectors to find AskMe response
-    let responseText = "";
-
-    // Try AskMe-specific selectors first - target the response container
+    // Try multiple selectors to find response
     const responseContainer = document.querySelector("#response-content-container");
-    console.log("AskMe response container found:", !!responseContainer);
-
     if (responseContainer) {
-      // Get all p tags within the response container
       const responseParagraphs = Array.from(responseContainer.querySelectorAll("p"));
       if (responseParagraphs.length > 0) {
-        responseText = responseParagraphs.map(p => p.innerText?.trim()).filter(text => text).join('\n\n');
-        console.log("Got AskMe response from response-content-container:", responseText?.substring(0, 100));
+        return responseParagraphs.map(p => p.innerText?.trim()).filter(text => text).join('\n\n');
       }
     }
 
-    // Fallback 1: Try other AskMe selectors
-    if (!responseText) {
-      const askmeMessages = Array.from(document.querySelectorAll(".chat-response, .message-content, [data-role='assistant']"));
-      console.log("AskMe response messages found:", askmeMessages.length);
+    const responseSelectors = [
+      ".chat-response, .message-content, [data-role='assistant']",
+      'div[data-testid*="conversation"] div, .conversation div, .chat-message div'
+    ];
 
-      if (askmeMessages.length > 0) {
-        const lastMessage = askmeMessages[askmeMessages.length - 1];
-        responseText = lastMessage?.innerText?.trim();
-        console.log("Got AskMe response from chat-response:", responseText?.substring(0, 100));
+    for (const selector of responseSelectors) {
+      const elements = Array.from(document.querySelectorAll(selector));
+      if (elements.length > 0) {
+        const lastElement = elements[elements.length - 1];
+        const text = lastElement?.innerText?.trim();
+        if (text && text.length > 10 && !text.includes("Send a message")) return text;
       }
     }
 
-    // Fallback 2: Look for conversation content
-    if (!responseText) {
-      const conversationDivs = Array.from(document.querySelectorAll('div[data-testid*="conversation"] div, .conversation div, .chat-message div'));
-      console.log("AskMe conversation divs found:", conversationDivs.length);
-
-      const recentDivs = conversationDivs.slice(-10);
-      for (let i = recentDivs.length - 1; i >= 0; i--) {
-        const text = recentDivs[i]?.innerText?.trim();
-        if (text && text.length > 10 && !text.includes("Send a message")) {
-          responseText = text;
-          console.log("Got AskMe response from conversation:", responseText?.substring(0, 100));
-          break;
-        }
-      }
-    }
-
-    return responseText || "No AskMe response detected - check console for details";
+    return "No AskMe response detected - check console for details";
   }
+};
 
+// Runs inside the target page
+async function sendPromptAndScrape(prompt, who) {
+  if (AIServiceHandlers[who]) {
+    return await AIServiceHandlers[who](prompt);
+  }
   return "Unsupported target";
 }
