@@ -105,153 +105,145 @@ DOM.get("generate-summary").addEventListener("click", async () => {
   await generateSummary();
 });
 
-// API Key management - auto-save on input (with debounce)
-let saveTimeout;
-document.getElementById("openai-api-key").addEventListener("input", (e) => {
-  const apiKey = e.target.value.trim();
+// API Key management utility
+const APIKeyManager = {
+  saveTimeout: null,
 
-  // Clear previous timeout
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
-  }
-
-  // Debounce the save operation
-  saveTimeout = setTimeout(async () => {
-    await saveApiKey(apiKey);
-  }, 1000); // Save after 1 second of no typing
-
-  // Update button visibility immediately
-  updateSummaryButtonState();
-});
-
-// Manual save button
-document.getElementById("save-api-key").addEventListener("click", async () => {
-  const apiKey = document.getElementById("openai-api-key").value.trim();
-  await saveApiKey(apiKey);
-});
-
-// Change API key button
-document.getElementById("change-api-key").addEventListener("click", () => {
-  showInputModeWithCurrentKey();
-});
-
-// Remove API key button
-document.getElementById("remove-api-key").addEventListener("click", async () => {
-  if (confirm("Are you sure you want to remove your API key?")) {
-    await saveApiKey(""); // Save empty string to remove
-  }
-});
-
-// Also save on blur to ensure it's saved
-document.getElementById("openai-api-key").addEventListener("blur", async (e) => {
-  const apiKey = e.target.value.trim();
-  if (apiKey) {
-    await saveApiKey(apiKey);
-  }
-});
-
-// Unified save function with fallback
-async function saveApiKey(apiKey) {
-  try {
-    // Try Chrome storage first
-    if (chrome && chrome.storage && chrome.storage.local) {
-      if (apiKey) {
-        await chrome.storage.local.set({ openaiApiKey: apiKey });
-        updateApiStatus("API key saved (Chrome)");
-        showSavedMode();
-      } else {
-        await chrome.storage.local.remove("openaiApiKey");
-        updateApiStatus("API key not configured");
-        showInputMode();
-      }
-    } else {
-      // Fallback to localStorage
-      if (apiKey) {
-        localStorage.setItem("openaiApiKey", apiKey);
-        updateApiStatus("API key saved (local)");
-        showSavedMode();
-      } else {
-        localStorage.removeItem("openaiApiKey");
-        updateApiStatus("API key not configured");
-        showInputMode();
-      }
-    }
-    updateSummaryButtonState();
-  } catch (error) {
-    console.error("Error saving API key:", error);
-    updateApiStatus(`Error saving API key: ${error.message}`);
-  }
-}
-
-async function loadApiKey() {
-  try {
-    let apiKey = null;
-
-    // Try Chrome storage first
-    if (chrome && chrome.storage && chrome.storage.local) {
-      try {
-        const result = await chrome.storage.local.get("openaiApiKey");
-        apiKey = result.openaiApiKey;
-      } catch (chromeError) {
-        // Chrome storage failed, will try localStorage
-      }
-    }
-
-    // Fallback to localStorage if Chrome storage failed or not available
-    if (!apiKey) {
-      apiKey = localStorage.getItem("openaiApiKey");
-    }
-
-    if (apiKey) {
-      const apiKeyInput = document.getElementById("openai-api-key");
-      apiKeyInput.value = apiKey; // Set value but it will be hidden
-      updateApiStatus("API key configured");
-      showSavedMode();
-      // Check if we should show summary button
+  init() {
+    // Auto-save on input (with debounce)
+    DOM.get("openai-api-key").addEventListener("input", (e) => {
+      const apiKey = e.target.value.trim();
+      this.debouncedSave(apiKey);
       updateSummaryButtonState();
-    } else {
-      updateApiStatus("API key not configured");
-      showInputMode();
+    });
+
+    // Manual save button
+    DOM.get("save-api-key").addEventListener("click", async () => {
+      const apiKey = DOM.get("openai-api-key").value.trim();
+      await this.save(apiKey);
+    });
+
+    // Change API key button
+    DOM.get("change-api-key").addEventListener("click", () => {
+      this.showInputModeWithCurrentKey();
+    });
+
+    // Remove API key button
+    DOM.get("remove-api-key").addEventListener("click", async () => {
+      if (confirm("Are you sure you want to remove your API key?")) {
+        await this.save(""); // Save empty string to remove
+      }
+    });
+
+    // Also save on blur to ensure it's saved
+    DOM.get("openai-api-key").addEventListener("blur", async (e) => {
+      const apiKey = e.target.value.trim();
+      if (apiKey) {
+        await this.save(apiKey);
+      }
+    });
+  },
+
+  debouncedSave(apiKey) {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
     }
-  } catch (error) {
-    console.error("Error loading API key:", error);
-    updateApiStatus(`Error loading API key: ${error.message}`);
-    showInputMode();
+    this.saveTimeout = setTimeout(async () => {
+      await this.save(apiKey);
+    }, 1000);
+  },
+
+  async save(apiKey) {
+    try {
+      // Try Chrome storage first
+      if (chrome && chrome.storage && chrome.storage.local) {
+        if (apiKey) {
+          await chrome.storage.local.set({ openaiApiKey: apiKey });
+          this.updateStatus("API key saved (Chrome)");
+          this.showSavedMode();
+        } else {
+          await chrome.storage.local.remove("openaiApiKey");
+          this.updateStatus("API key not configured");
+          this.showInputMode();
+        }
+      } else {
+        // Fallback to localStorage
+        if (apiKey) {
+          localStorage.setItem("openaiApiKey", apiKey);
+          this.updateStatus("API key saved (local)");
+          this.showSavedMode();
+        } else {
+          localStorage.removeItem("openaiApiKey");
+          this.updateStatus("API key not configured");
+          this.showInputMode();
+        }
+      }
+      updateSummaryButtonState();
+    } catch (error) {
+      console.error("Error saving API key:", error);
+      this.updateStatus(`Error saving API key: ${error.message}`);
+    }
+  },
+
+  async load() {
+    try {
+      let apiKey = null;
+
+      // Try Chrome storage first
+      if (chrome && chrome.storage && chrome.storage.local) {
+        try {
+          const result = await chrome.storage.local.get("openaiApiKey");
+          apiKey = result.openaiApiKey;
+        } catch (chromeError) {
+          // Chrome storage failed, will try localStorage
+        }
+      }
+
+      // Fallback to localStorage if Chrome storage failed or not available
+      if (!apiKey) {
+        apiKey = localStorage.getItem("openaiApiKey");
+      }
+
+      if (apiKey) {
+        DOM.get("openai-api-key").value = apiKey;
+        this.updateStatus("API key configured");
+        this.showSavedMode();
+        updateSummaryButtonState();
+      } else {
+        this.updateStatus("API key not configured");
+        this.showInputMode();
+      }
+    } catch (error) {
+      console.error("Error loading API key:", error);
+      this.updateStatus(`Error loading API key: ${error.message}`);
+      this.showInputMode();
+    }
+  },
+
+  updateStatus(message) {
+    DOM.get("api-status").textContent = message;
+  },
+
+  showInputMode() {
+    DOM.get("api-key-input-mode").classList.remove("hidden");
+    DOM.get("api-key-saved-mode").classList.add("hidden");
+    DOM.get("openai-api-key").value = "";
+    DOM.get("openai-api-key").focus();
+  },
+
+  showSavedMode() {
+    DOM.get("api-key-input-mode").classList.add("hidden");
+    DOM.get("api-key-saved-mode").classList.remove("hidden");
+  },
+
+  showInputModeWithCurrentKey() {
+    DOM.get("api-key-input-mode").classList.remove("hidden");
+    DOM.get("api-key-saved-mode").classList.add("hidden");
+    DOM.get("openai-api-key").focus();
   }
-}
+};
 
-function updateApiStatus(message) {
-  document.getElementById("api-status").textContent = message;
-}
-
-// UI Mode switching functions
-function showInputMode() {
-  document.getElementById("api-key-input-mode").classList.remove("hidden");
-  document.getElementById("api-key-saved-mode").classList.add("hidden");
-  // Clear the input and focus it
-  const input = document.getElementById("openai-api-key");
-  input.value = "";
-  input.focus();
-}
-
-function showSavedMode() {
-  document.getElementById("api-key-input-mode").classList.add("hidden");
-  document.getElementById("api-key-saved-mode").classList.remove("hidden");
-}
-
-function showInputModeWithCurrentKey() {
-  document.getElementById("api-key-input-mode").classList.remove("hidden");
-  document.getElementById("api-key-saved-mode").classList.add("hidden");
-  // Keep the current API key in the input and focus it
-  const input = document.getElementById("openai-api-key");
-  input.focus();
-  input.select(); // Select all text so user can easily replace it
-}
-
-function checkAndShowSummaryButton() {
-  updateSummaryButtonState();
-}
-
+// Summary generation functionality  
 async function generateSummary() {
   const method = document.getElementById("summary-method").value;
 
@@ -437,11 +429,11 @@ async function generateBrowserSummary(text) {
 }
 
 function updateModelStatus(status) {
-  document.getElementById("model-status").textContent = status;
+  DOM.get("model-status").textContent = status;
 }
 
 function updateSummaryButtonState() {
-  const method = document.getElementById("summary-method").value;
+  const method = DOM.get("summary-method").value;
   const hasResponses = Object.keys(collectedResponses).length > 0;
   const hasValidResponses = Object.values(collectedResponses).some(response =>
     response && response.length > 10 && !response.includes("Error:") && !response.includes("No tab open")
@@ -452,31 +444,31 @@ function updateSummaryButtonState() {
   if (method === "browser") {
     canSummarize = hasResponses && hasValidResponses && isModelLoaded;
   } else if (method === "openai") {
-    const hasApiKey = document.getElementById("openai-api-key").value.trim().length > 0;
+    const hasApiKey = DOM.get("openai-api-key").value.trim().length > 0;
     canSummarize = hasResponses && hasValidResponses && hasApiKey;
   }
 
   if (canSummarize) {
-    document.getElementById("generate-summary").classList.remove("hidden");
+    DOM.get("generate-summary").classList.remove("hidden");
   } else {
-    document.getElementById("generate-summary").classList.add("hidden");
+    DOM.get("generate-summary").classList.add("hidden");
   }
 }
 
 // Enable/disable send button based on prompt input
 function updateSendButton() {
-  const prompt = document.getElementById("prompt").value.trim();
-  const sendButton = document.getElementById("send");
-  sendButton.disabled = prompt.length === 0;
+  const prompt = DOM.get("prompt").value.trim();
+  DOM.get("send").disabled = prompt.length === 0;
 }
 
 // Add event listeners to update visual state when checkboxes change
 document.addEventListener('DOMContentLoaded', () => {
-  // Load saved API key
-  loadApiKey();
+  // Initialize API key management
+  APIKeyManager.init();
+  APIKeyManager.load();
 
   // Add input listener to prompt textarea
-  document.getElementById("prompt").addEventListener("input", updateSendButton);
+  DOM.get("prompt").addEventListener("input", updateSendButton);
 
   // Initialize send button state
   updateSendButton();
